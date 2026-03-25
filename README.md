@@ -47,13 +47,14 @@ analytics_queries.sql
 
 ## Project Structure
 
+```plaintext
 ├── schema.sql                -- Table definitions and relationships
 ├── seed_data.sql             -- Sample dataset for testing
 ├── basic_queries.sql         -- Lookup and retrieval queries
 ├── analytics_queries.sql     -- Aggregations and insights
 ├── views.sql                 -- Reusable query abstractions
 ├── procedures.sql            -- Parameterized database operations
-
+```
 
 ## Core Tables
 
@@ -132,10 +133,13 @@ Key examples:
 
 `vw_book_details`
 → Aggregated book metadata (authors, series, order)
+
 `vw_reader_books`
 → Reader activity across all books
+
 `vw_bookclub_books`
 → Book club selections with display order
+
 `vw_angela_read_books`, `vw_tori_read_books`
 → Reader-specific book lists with ratings
 
@@ -145,10 +149,13 @@ Created procedures to utilize reusable, parameterized operations
 
 `AddBook`
 → Inserts a book and links authors and genres
+
 `SetReaderRating`
 → Updates or inserts a reader’s rating
+
 `SetReadStatus`
 → Marks a book as read/unread
+
 `UpdateBookGenres`
 → Replaces a book’s genre assignments
 
