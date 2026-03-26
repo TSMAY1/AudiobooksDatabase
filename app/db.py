@@ -2,6 +2,10 @@ import pyodbc
 import pandas as pd
 import os
 from dotenv import load_dotenv
+from pathlib import Path
+import fitz # PyMuPDF
+
+fitz.TOOLS.mupdf_display_warnings(False)
 
 load_dotenv()
 
@@ -45,3 +49,20 @@ def execute_procedure(proc_name, params):
         cursor = conn.cursor()
         cursor.execute(sql, params)
         conn.commit()
+
+
+def render_pdf_to_images(pdf_path: str):
+    pdf_file = Path(pdf_path)
+
+    if not pdf_file.exists():
+        raise FileNotFoundError(f"PDF not found: {pdf_path}")
+
+    doc = fitz.open(pdf_file)
+    images = []
+
+    for page in doc:
+        pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))
+        images.append(pix.tobytes("png"))
+
+    doc.close()
+    return images

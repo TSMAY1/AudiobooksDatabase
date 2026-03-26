@@ -61,7 +61,7 @@ if not genre_df.empty:
         ]
     })
 
-    st.dataframe(genre_display_df, use_container_width=True, hide_index=True)
+    st.dataframe(genre_display_df, width='stretch', hide_index=True)
 
 
 else:

@@ -28,6 +28,7 @@ if search:
     mask = (
         df["Title"].str.contains(search, case=False, na=False)
         | df["Authors"].str.contains(search, case=False, na=False)
+        | df["SeriesName"].str.contains(search, case=False, na=False)
     )
     df = df[mask]
 
