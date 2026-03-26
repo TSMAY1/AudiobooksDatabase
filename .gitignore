@@ -374,3 +374,4 @@ Calendars/
 .venv/
 venv/
 env/
+.env
