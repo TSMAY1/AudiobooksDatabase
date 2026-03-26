@@ -13,6 +13,13 @@ This project began as a hands-on SQL learning exercise and evolved into a fully 
 
 ## Getting Started
 
+```bash
+python -m venv .venv
+source .venv/bin/activate  # or .venv\Scripts\activate on Windows
+pip install -r requirements.txt
+streamlit run app/app.py
+```
+
 To run this project locally in SQL Server:
 
 1. Create a new database:

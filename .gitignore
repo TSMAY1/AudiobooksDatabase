@@ -363,6 +363,14 @@ MigrationBackup/
 FodyWeavers.xsd
 
 # Ignore flyer and calendar folders
-/Flyers/
-/Calendars/
+Flyers/
+Calendars/
 *.pdf
+
+# Ignore the .vs folder
+.vs/
+
+# Ignore vitrual environment
+.venv/
+venv/
+env/

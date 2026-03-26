@@ -140,7 +140,7 @@ ORDER BY NumBooks DESC;
 GO
 
 -- Tori's highest rated books
-SELECT TOP 20
+SELECT TOP 50
     BookID,
     Title,
     Authors,
@@ -152,7 +152,7 @@ GO
 
 
 -- Angela's highest rated books
-SELECT TOP 20
+SELECT TOP 50
     BookID,
     Title,
     Authors,
