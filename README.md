@@ -13,14 +13,16 @@ This project began as a hands-on SQL learning exercise and evolved into a fully 
 
 ## Getting Started
 
-```bash
-python -m venv .venv
-source .venv/bin/activate  # or .venv\Scripts\activate on Windows
-pip install -r requirements.txt
-streamlit run app/app.py
-```
+This project consists of two parts:
 
-To run this project locally in SQL Server:
+1. A SQL Server database
+2. A Streamlit web interface
+
+Follow the steps below to set up both.
+
+### 1. Set Up the Database (SQL Server)
+
+Create a new database:
 
 1. Create a new database:
 
@@ -52,15 +54,47 @@ basic_queries.sql
 analytics_queries.sql
 ```
 
+2. Run the Streamlit App
+
+Create and activate a virtual environment:
+
+```bash
+python -m venv .venv
+.venv\Scripts\activate   # Windows
+# or
+source .venv/bin/activate  # Mac/Linux
+```
+
+Install dependencies:
+
+```bash
+pip install -r requirements.txt
+```
+
+Run the app:
+
+```bash
+streamlit run app/app.py
+```
+
 ## Project Structure
 
 ```plaintext
-├── schema.sql                -- Table definitions and relationships
-├── seed_data.sql             -- Sample dataset for testing
-├── basic_queries.sql         -- Lookup and retrieval queries
-├── analytics_queries.sql     -- Aggregations and insights
-├── views.sql                 -- Reusable query abstractions
-├── procedures.sql            -- Parameterized database operations
+├── app/
+│   ├── app.py
+│   ├── db.py
+│   └── pages/
+│
+├── sql/
+│   ├── schema.sql
+│   ├── seed_data.sql
+│   ├── views.sql
+│   ├── procedures.sql
+│   ├── basic_queries.sql
+│   └── analytics_queries.sql
+│
+├── requirements.txt
+├── README.md
 ```
 
 ## Core Tables
