@@ -194,8 +194,8 @@ Created procedures to utilize reusable, parameterized operations
 `SetReaderRating`
 → Updates or inserts a reader’s rating
 
-`SetReadStatus`
-→ Marks a book as read/unread
+`SetReadingStatus`
+→ Marks a book as unread/TBR/reading/read/DNF
 
 `UpdateBookGenres`
 → Replaces a book’s genre assignments
