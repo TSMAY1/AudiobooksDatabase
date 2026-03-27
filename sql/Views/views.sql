@@ -14,7 +14,8 @@ JOIN books b ON rs.BookID = b.BookID
 JOIN book_authors ba ON b.BookID = ba.BookID
 JOIN authors_new a ON ba.AuthorID = a.AuthorID
 JOIN series s ON b.SeriesID = s.SeriesID
-WHERE rs.ReadStatus = 1 AND rs.ReaderID = 1
+WHERE rs.ReadingStatus = 'Read' 
+	AND rs.ReaderID = 1
 GROUP BY b.BookID, b.Title, s.SeriesName, b.BookNumber, rs.Rating;
 GO
 
@@ -36,7 +37,7 @@ JOIN authors_new a
 	ON ba.AuthorID = a.AuthorID
 JOIN series s 
 	ON b.SeriesID = s.SeriesID
-WHERE rs.ReadStatus = 1 
+WHERE rs.ReadingStatus = 'Read'
 	AND rs.ReaderID = 2
 GROUP BY b.BookID, b.Title, s.SeriesName, b.BookNumber, rs.Rating;
 GO
@@ -59,7 +60,7 @@ JOIN authors_new a
 	ON ba.AuthorID = a.AuthorID
 JOIN series s 
 	ON b.SeriesID = s.SeriesID
-GROUP BY b.BookID, b.Title, s.SeriesName, b.BookNumber
+GROUP BY b.BookID, b.Title, s.SeriesName, b.BookNumber;
 GO
 
 -- Reader activity view
@@ -70,7 +71,7 @@ SELECT
 	b.BookID,
 	r.ReaderName, 
 	b.Title, 
-	rs.ReadStatus, 
+	rs.ReadingStatus, 
 	rs.Rating
 FROM reading_status rs
 JOIN books b

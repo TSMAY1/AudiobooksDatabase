@@ -60,15 +60,16 @@ CREATE TABLE readers (
 GO
 
 CREATE TABLE reading_status (
-	ReaderID INT,
-	BookID INT,
-	ReadStatus BIT,
-	Rating DECIMAL(4, 2) NULL,
-	PRIMARY KEY (ReaderID, BookID),
-	FOREIGN KEY (ReaderID) REFERENCES readers(ReaderID),
-	FOREIGN KEY (BookID) REFERENCES books(BookID)
+    ReaderID INT,
+    BookID INT,
+    ReadingStatus NVARCHAR(20) NOT NULL
+        CONSTRAINT CK_reading_status_ReadingStatus
+        CHECK (ReadingStatus IN ('Unread', 'TBR', 'Reading', 'Read', 'DNF')),
+    Rating DECIMAL(4,2) NULL,
+    PRIMARY KEY (ReaderID, BookID),
+    FOREIGN KEY (ReaderID) REFERENCES readers(ReaderID),
+    FOREIGN KEY (BookID) REFERENCES books(BookID)
 );
-GO
 
 CREATE TABLE cozy_corner_book_club (
 	ClubID int IDENTITY(1, 1) PRIMARY KEY,

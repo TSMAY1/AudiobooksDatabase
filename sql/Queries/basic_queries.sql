@@ -46,7 +46,49 @@ SELECT
 FROM vw_reader_books rb
 JOIN vw_book_details bd
     ON rb.BookID = bd.BookID
-WHERE rb.ReadStatus = 0
+WHERE rb.ReadingStatus = 'Unread'
+ORDER BY rb.ReaderName, bd.Authors, bd.SeriesName, bd.BookNumber;
+GO
+
+-- See all to be read (TBR) books by reader
+SELECT
+    bd.Authors,
+    rb.Title,
+    bd.SeriesName,
+    bd.BookNumber,
+    rb.ReaderName
+FROM vw_reader_books rb
+JOIN vw_book_details bd
+    ON rb.BookID = bd.BookID
+WHERE rb.ReadingStatus = 'TBR'
+ORDER BY rb.ReaderName, bd.Authors, bd.SeriesName, bd.BookNumber;
+GO
+
+-- See all currently reading books by reader
+SELECT
+    bd.Authors,
+    rb.Title,
+    bd.SeriesName,
+    bd.BookNumber,
+    rb.ReaderName
+FROM vw_reader_books rb
+JOIN vw_book_details bd
+    ON rb.BookID = bd.BookID
+WHERE rb.ReadingStatus = 'Reading'
+ORDER BY rb.ReaderName, bd.Authors, bd.SeriesName, bd.BookNumber;
+GO
+
+-- See all did not finish (DNF) books by reader
+SELECT
+    bd.Authors,
+    rb.Title,
+    bd.SeriesName,
+    bd.BookNumber,
+    rb.ReaderName
+FROM vw_reader_books rb
+JOIN vw_book_details bd
+    ON rb.BookID = bd.BookID
+WHERE rb.ReadingStatus = 'DNF'
 ORDER BY rb.ReaderName, bd.Authors, bd.SeriesName, bd.BookNumber;
 GO
 
