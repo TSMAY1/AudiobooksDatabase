@@ -254,14 +254,14 @@ BEGIN
         BEGIN
             UPDATE reading_status
             SET Rating = @Rating,
-                ReadStatus = 1
+                ReadingStatus = 'Read'
             WHERE ReaderID = @ReaderID
               AND BookID = @BookID;
         END
         ELSE
         BEGIN
-            INSERT INTO reading_status (ReaderID, BookID, ReadStatus, Rating)
-            VALUES (@ReaderID, @BookID, 1, @Rating);
+            INSERT INTO reading_status (ReaderID, BookID, ReadingStatus, Rating)
+            VALUES (@ReaderID, @BookID, 'Read', @Rating);
         END;
 
         COMMIT TRANSACTION;
@@ -277,15 +277,15 @@ GO
 
 
 --------------------------------------------------
--- SetReadStatus
--- Marks a book as read or unread for a specified user
+-- SetReadingStatus
+-- Marks the current read status of a book for the specified reader
 --------------------------------------------------
 
-CREATE OR ALTER PROCEDURE SetReadStatus
+CREATE OR ALTER PROCEDURE SetReadingStatus
     @Title NVARCHAR(255),
     @AuthorName NVARCHAR(255),
     @ReaderName NVARCHAR(255),
-    @ReadStatus BIT
+    @ReadingStatus NVARCHAR(20)
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -297,7 +297,11 @@ BEGIN
         DECLARE @BookID INT;
         DECLARE @ReaderID INT;
 
-        -- Find the book
+        IF @ReadingStatus NOT IN ('Unread', 'TBR', 'Reading', 'Read', 'DNF')
+        BEGIN
+            RAISERROR('ReadingStatus must be Unread, TBR, Reading, Read, or DNF.', 16, 1);
+        END;
+
         SELECT @BookID = b.BookID
         FROM books b
         JOIN book_authors ba
@@ -312,7 +316,6 @@ BEGIN
             RAISERROR('Book not found.', 16, 1);
         END;
 
-        -- Find the reader
         SELECT @ReaderID = ReaderID
         FROM readers
         WHERE ReaderName = LTRIM(RTRIM(@ReaderName));
@@ -322,7 +325,6 @@ BEGIN
             RAISERROR('Reader not found.', 16, 1);
         END;
 
-        -- Insert or update
         IF EXISTS (
             SELECT 1
             FROM reading_status
@@ -331,14 +333,18 @@ BEGIN
         )
         BEGIN
             UPDATE reading_status
-            SET ReadStatus = @ReadStatus
+            SET ReadingStatus = @ReadingStatus,
+                Rating = CASE
+                            WHEN @ReadingStatus IN ('Unread', 'TBR', 'Reading') THEN NULL
+                            ELSE Rating
+                         END
             WHERE ReaderID = @ReaderID
               AND BookID = @BookID;
         END
         ELSE
         BEGIN
-            INSERT INTO reading_status (ReaderID, BookID, ReadStatus, Rating)
-            VALUES (@ReaderID, @BookID, @ReadStatus, NULL);
+            INSERT INTO reading_status (ReaderID, BookID, ReadingStatus, Rating)
+            VALUES (@ReaderID, @BookID, @ReadingStatus, NULL);
         END;
 
         COMMIT TRANSACTION;
@@ -346,7 +352,6 @@ BEGIN
     BEGIN CATCH
         IF @@TRANCOUNT > 0
             ROLLBACK TRANSACTION;
-
         THROW;
     END CATCH
 END;

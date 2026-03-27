@@ -6,7 +6,7 @@ SELECT
     ReaderName,
     COUNT(*) AS TotalBooksRead
 FROM vw_reader_books
-WHERE ReadStatus = 1
+WHERE ReadingStatus = 'Read'
 GROUP BY ReaderName
 ORDER BY TotalBooksRead DESC;
 GO
@@ -28,8 +28,8 @@ JOIN readers rd2
     ON rd2.ReaderID = r2.ReaderID
 WHERE r1.ReaderID = @Reader1ID
   AND r2.ReaderID = @Reader2ID
-  AND r1.ReadStatus = 1
-  AND r2.ReadStatus = 1
+  AND r1.ReadingStatus = 'Read'
+  AND r2.ReadingStatus = 'Read'
 GROUP BY rd1.ReaderName, rd2.ReaderName;
 GO
 
@@ -39,7 +39,7 @@ SELECT
     CAST(AVG(Rating) AS DECIMAL(4,2)) AS AverageRating,
     COUNT(Rating) AS NumberOfRatedBooks
 FROM vw_reader_books
-WHERE ReadStatus = 1
+WHERE ReadingStatus = 'Read'
   AND Rating IS NOT NULL
 GROUP BY ReaderName
 ORDER BY AverageRating DESC;
@@ -54,7 +54,7 @@ JOIN genres g
     ON bg.GenreID = g.GenreID
 JOIN reading_status rs
     ON rs.BookID = bg.BookID
-WHERE rs.ReadStatus = 1
+WHERE rs.ReadingStatus = 'Read'
     AND bg.GenreType = 'Main'
 GROUP BY g.GenreName
 ORDER BY NumReads DESC;
@@ -69,7 +69,7 @@ JOIN genres g
     ON bg.GenreID = g.GenreID
 JOIN reading_status rs
     ON rs.BookID = bg.BookID
-WHERE rs.ReadStatus = 1
+WHERE rs.ReadingStatus = 'Read'
     AND bg.GenreType = 'Secondary'
 GROUP BY g.GenreName
 ORDER BY NumReads DESC;

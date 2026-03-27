@@ -18,7 +18,7 @@ queries = {
     "Total books read by reader": """
         SELECT ReaderName, COUNT(*) AS TotalBooksRead
         FROM vw_reader_books
-        WHERE ReadStatus = 1
+        WHERE ReadingStatus = 'Read'
         GROUP BY ReaderName
         ORDER BY TotalBooksRead DESC;
     """,
@@ -28,7 +28,7 @@ queries = {
             CAST(AVG(Rating) AS DECIMAL(4,2)) AS AverageRating,
             COUNT(Rating) AS NumberOfRatedBooks
         FROM vw_reader_books
-        WHERE ReadStatus = 1 AND Rating IS NOT NULL
+        WHERE ReadingStatus = 'Read' AND Rating IS NOT NULL
         GROUP BY ReaderName
         ORDER BY AverageRating DESC;
     """,

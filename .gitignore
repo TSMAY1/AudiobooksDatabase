@@ -363,6 +363,7 @@ MigrationBackup/
 FodyWeavers.xsd
 
 # Ignore flyer and calendar folders
+assets/
 Flyers/
 Calendars/
 *.pdf

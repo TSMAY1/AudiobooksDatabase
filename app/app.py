@@ -5,13 +5,16 @@ st.set_page_config(page_title="Audiobook Library", layout="wide")
 st.title("📚 Audiobook Library")
 st.markdown(
     """
-    Welcome to your audiobook database interface.
+    Welcome to Tori and Angela's audiobook database interface!!
 
     Use the sidebar to navigate:
     - Library
     - Add Book
-    - Reading Status
-    - Genres
-    - Analytics
+    - Set Reading Status
+    - Manage TBR
+    - Update Genres
+    - Fun Stats
+    - Cozy Corner Bookclub Flyers
+    - Cozy Corner Bookclub Calendars
     """
 )

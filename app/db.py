@@ -5,7 +5,6 @@ from dotenv import load_dotenv
 from pathlib import Path
 import fitz # PyMuPDF
 
-fitz.TOOLS.mupdf_display_warnings(False)
 
 load_dotenv()
 
@@ -51,18 +50,37 @@ def execute_procedure(proc_name, params):
         conn.commit()
 
 
+fitz.TOOLS.mupdf_display_warnings(False)
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
+
+def resolve_asset_path(stored_path: str) -> Path:
+    """
+    Convert a database-stored relative path like
+    'assets\\Flyers\\2024-71\\file.pdf'
+    into an absolute path under the project root.
+    """
+    if not stored_path:
+        raise ValueError("No file path provided.")
+
+    normalized = stored_path.replace("\\", "/")
+    return PROJECT_ROOT / normalized
+
+
 def render_pdf_to_images(pdf_path: str):
-    pdf_file = Path(pdf_path)
+    pdf_file = resolve_asset_path(pdf_path)
 
     if not pdf_file.exists():
-        raise FileNotFoundError(f"PDF not found: {pdf_path}")
+        raise FileNotFoundError(
+            f"PDF not found. Stored path: '{pdf_path}' | Resolved path: '{pdf_file}'"
+        )
 
-    doc = fitz.open(pdf_file)
     images = []
 
-    for page in doc:
-        pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))
-        images.append(pix.tobytes("png"))
+    with fitz.open(pdf_file) as doc:
+        for page in doc:
+            pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))
+            images.append(pix.tobytes("png"))
 
-    doc.close()
     return images
