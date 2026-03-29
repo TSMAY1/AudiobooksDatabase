@@ -64,7 +64,7 @@ BEGIN
 			RAISERROR('This book already appears to be in the database.', 16, 1);
 		END;
 
-		-- 3. Insert the book
+				-- 3. Insert the book
 		INSERT INTO books (
 			Title,
 			SeriesID,
@@ -85,6 +85,15 @@ BEGIN
 		);
 
 		SET @BookID = SCOPE_IDENTITY();
+
+		-- Seed default reading status for all readers
+		INSERT INTO reading_status (ReaderID, BookID, ReadingStatus, Rating)
+		SELECT
+			r.ReaderID,
+			@BookID,
+			'Unread',
+			NULL
+		FROM readers r;
 
 		-- 4. Split authors into a table variable (author order may not be guaranteed with STRING_SPLIT)
 		DECLARE @AuthorTable TABLE (
