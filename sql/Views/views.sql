@@ -47,20 +47,33 @@ GO
 
 CREATE OR ALTER VIEW vw_book_details AS
 
-SELECT 
-	b.BookID,
-	STRING_AGG(a.AuthorName, ', ') AS Authors,
-	b.Title, 
-	s.SeriesName, 
-	b.BookNumber
+SELECT
+    b.BookID,
+    STRING_AGG(a.AuthorName, ', ') AS Authors,
+    b.Title,
+    s.SeriesID,
+    s.SeriesName,
+    p.SeriesName AS ParentSeriesName,
+    COALESCE(p.SeriesName, s.SeriesName) AS UniverseName,
+    b.BookNumber,
+    b.UniverseReadingOrder
 FROM books b
-JOIN book_authors ba 
-	ON b.BookID = ba.BookID
-JOIN authors_new a 
-	ON ba.AuthorID = a.AuthorID
-JOIN series s 
-	ON b.SeriesID = s.SeriesID
-GROUP BY b.BookID, b.Title, s.SeriesName, b.BookNumber;
+JOIN book_authors ba
+    ON ba.BookID = b.BookID
+JOIN authors_new a
+    ON a.AuthorID = ba.AuthorID
+JOIN series s
+    ON s.SeriesID = b.SeriesID
+LEFT JOIN series p
+    ON p.SeriesID = s.ParentSeriesID
+GROUP BY
+    b.BookID,
+    b.Title,
+    s.SeriesID,
+    s.SeriesName,
+    p.SeriesName,
+    b.BookNumber,
+    b.UniverseReadingOrder;
 GO
 
 -- Reader activity view
