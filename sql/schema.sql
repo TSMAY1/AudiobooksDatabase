@@ -3,8 +3,9 @@ USE Audiobooks;
 CREATE TABLE books (
 	BookID INT PRIMARY KEY IDENTITY(1,1),
 	Title NVARCHAR(255) NOT NULL,
-	SeriesID INT,
+	SeriesID INT NULL,
 	BookNumber DECIMAL(4, 1),
+	UniverseReadingOrder DECIMAL(5,2) NULL,
 	LengthType NVARCHAR(50),
 	Demographic NVARCHAR(50),
 	Full_Cast BIT,
@@ -32,7 +33,9 @@ GO
 
 CREATE TABLE series (
 	SeriesID INT PRIMARY KEY IDENTITY(1,1),
-	SeriesName NVARCHAR(255)
+	SeriesName NVARCHAR(255),
+	ParentSeriesID INT NULL,
+	FOREIGN KEY (ParentSeries) REFERENCES series (SeriesID)
 );
 GO
 

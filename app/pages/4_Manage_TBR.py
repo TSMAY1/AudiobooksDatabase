@@ -15,7 +15,7 @@ def get_first_author(authors: str) -> str:
 
 
 def load_tbr_books(reader_name: str):
-    """Load the current TBR list for the selected reader."""
+    """Load the current TBR list for the selected reader, including genres."""
     return run_query(
         """
         SELECT
@@ -24,12 +24,31 @@ def load_tbr_books(reader_name: str):
             rb.Title,
             bd.SeriesName,
             bd.BookNumber,
-            rb.ReaderName
+            rb.ReaderName,
+            STRING_AGG(
+                CASE WHEN bg.GenreType = 'Main' THEN g.GenreName END,
+                ', '
+            ) AS MainGenres,
+            STRING_AGG(
+                CASE WHEN bg.GenreType = 'Secondary' THEN g.GenreName END,
+                ', '
+            ) AS SecondaryGenres
         FROM vw_reader_books rb
         JOIN vw_book_details bd
             ON rb.BookID = bd.BookID
+        LEFT JOIN book_genres bg
+            ON bd.BookID = bg.BookID
+        LEFT JOIN genres g
+            ON bg.GenreID = g.GenreID
         WHERE rb.ReaderName = ?
           AND rb.ReadingStatus = 'TBR'
+        GROUP BY
+            bd.BookID,
+            bd.Authors,
+            rb.Title,
+            bd.SeriesName,
+            bd.BookNumber,
+            rb.ReaderName
         ORDER BY bd.Authors, bd.SeriesName, bd.BookNumber, rb.Title;
         """,
         params=[reader_name],
@@ -91,7 +110,16 @@ if display_df.empty:
     st.info("No books are currently on this TBR list.")
 else:
     st.dataframe(
-        display_df[["Authors", "Title", "SeriesName", "BookNumber"]],
+        display_df[
+            [
+                "Authors",
+                "Title",
+                "SeriesName",
+                "BookNumber",
+                "MainGenres",
+                "SecondaryGenres",
+            ]
+        ],
         width="stretch",
         hide_index=True,
     )

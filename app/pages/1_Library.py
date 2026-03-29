@@ -22,7 +22,7 @@ ORDER BY bd.Authors, bd.SeriesName, bd.BookNumber;
 
 df = run_query(query)
 
-search = st.text_input("Search by title or author")
+search = st.text_input("Search by title, author, or series name")
 
 if search:
     mask = (
