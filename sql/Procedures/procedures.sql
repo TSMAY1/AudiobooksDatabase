@@ -207,8 +207,7 @@ GO
 --------------------------------------------------
 
 CREATE OR ALTER PROCEDURE SetReaderRating
-    @Title NVARCHAR(255),
-    @AuthorName NVARCHAR(255),
+    @BookID INT,
     @ReaderName NVARCHAR(255),
     @Rating DECIMAL(4,2)
 AS
@@ -219,25 +218,19 @@ BEGIN
     BEGIN TRANSACTION;
 
     BEGIN TRY
-        DECLARE @BookID INT;
         DECLARE @ReaderID INT;
 
-        -- Find the book
-        SELECT @BookID = b.BookID
-        FROM books b
-        JOIN book_authors ba
-            ON b.BookID = ba.BookID
-        JOIN authors_new a
-            ON ba.AuthorID = a.AuthorID
-        WHERE b.Title = LTRIM(RTRIM(@Title))
-          AND a.AuthorName = LTRIM(RTRIM(@AuthorName));
-
-        IF @BookID IS NULL
+        -- Validate book exists
+        IF NOT EXISTS (
+            SELECT 1
+            FROM books
+            WHERE BookID = @BookID
+        )
         BEGIN
             RAISERROR('Book not found.', 16, 1);
         END;
 
-        -- Find the reader
+        -- Find reader
         SELECT @ReaderID = ReaderID
         FROM readers
         WHERE ReaderName = LTRIM(RTRIM(@ReaderName));
@@ -247,30 +240,21 @@ BEGIN
             RAISERROR('Reader not found.', 16, 1);
         END;
 
-        -- Optional validation
+        -- Validate rating
         IF @Rating < 0 OR @Rating > 5
         BEGIN
             RAISERROR('Rating must be between 0 and 5.', 16, 1);
         END;
 
-        -- Insert or update
-        IF EXISTS (
-            SELECT 1
-            FROM reading_status
-            WHERE ReaderID = @ReaderID
-              AND BookID = @BookID
-        )
+        -- Update existing row only
+        UPDATE reading_status
+        SET Rating = @Rating
+        WHERE ReaderID = @ReaderID
+          AND BookID = @BookID;
+
+        IF @@ROWCOUNT = 0
         BEGIN
-            UPDATE reading_status
-            SET Rating = @Rating,
-                ReadingStatus = 'Read'
-            WHERE ReaderID = @ReaderID
-              AND BookID = @BookID;
-        END
-        ELSE
-        BEGIN
-            INSERT INTO reading_status (ReaderID, BookID, ReadingStatus, Rating)
-            VALUES (@ReaderID, @BookID, 'Read', @Rating);
+            RAISERROR('Reading status row not found for this reader and book.', 16, 1);
         END;
 
         COMMIT TRANSACTION;
@@ -291,8 +275,7 @@ GO
 --------------------------------------------------
 
 CREATE OR ALTER PROCEDURE SetReadingStatus
-    @Title NVARCHAR(255),
-    @AuthorName NVARCHAR(255),
+    @BookID INT,
     @ReaderName NVARCHAR(255),
     @ReadingStatus NVARCHAR(20)
 AS
@@ -303,7 +286,6 @@ BEGIN
     BEGIN TRANSACTION;
 
     BEGIN TRY
-        DECLARE @BookID INT;
         DECLARE @ReaderID INT;
 
         IF @ReadingStatus NOT IN ('Unread', 'TBR', 'Reading', 'Read', 'DNF')
@@ -311,20 +293,17 @@ BEGIN
             RAISERROR('ReadingStatus must be Unread, TBR, Reading, Read, or DNF.', 16, 1);
         END;
 
-        SELECT @BookID = b.BookID
-        FROM books b
-        JOIN book_authors ba
-            ON b.BookID = ba.BookID
-        JOIN authors_new a
-            ON ba.AuthorID = a.AuthorID
-        WHERE b.Title = LTRIM(RTRIM(@Title))
-          AND a.AuthorName = LTRIM(RTRIM(@AuthorName));
-
-        IF @BookID IS NULL
+        -- Validate book exists
+        IF NOT EXISTS (
+            SELECT 1
+            FROM books
+            WHERE BookID = @BookID
+        )
         BEGIN
             RAISERROR('Book not found.', 16, 1);
         END;
 
+        -- Find reader
         SELECT @ReaderID = ReaderID
         FROM readers
         WHERE ReaderName = LTRIM(RTRIM(@ReaderName));
@@ -374,10 +353,9 @@ GO
 --------------------------------------------------
 
 CREATE OR ALTER PROCEDURE UpdateBookGenres
-    @Title NVARCHAR(255),
-    @AuthorName NVARCHAR(255),
-    @MainGenres NVARCHAR(MAX) = NULL,       -- e.g. 'Fantasy, Adventure'
-    @SecondaryGenres NVARCHAR(MAX) = NULL   -- e.g. 'Magic, Politics'
+    @BookID INT,
+    @MainGenres NVARCHAR(MAX) = NULL,
+    @SecondaryGenres NVARCHAR(MAX) = NULL
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -386,29 +364,20 @@ BEGIN
     BEGIN TRANSACTION;
 
     BEGIN TRY
-        DECLARE @BookID INT;
-
-        -- 1. Find the book
-        SELECT @BookID = b.BookID
-        FROM books b
-        JOIN book_authors ba
-            ON b.BookID = ba.BookID
-        JOIN authors_new a
-            ON ba.AuthorID = a.AuthorID
-        WHERE b.Title = LTRIM(RTRIM(@Title))
-          AND a.AuthorName = LTRIM(RTRIM(@AuthorName));
-
-        -- 2. Stop if book was not found
-        IF @BookID IS NULL
+        -- Validate book exists
+        IF NOT EXISTS (
+            SELECT 1
+            FROM books
+            WHERE BookID = @BookID
+        )
         BEGIN
             RAISERROR('Book not found.', 16, 1);
         END;
 
-        -- 3. Remove existing genre links
+        -- Remove existing genre links
         DELETE FROM book_genres
         WHERE BookID = @BookID;
 
-        -- 4. Process all unique genres first, so genres table stays complete
         DECLARE @AllGenres TABLE (
             GenreName NVARCHAR(255) PRIMARY KEY
         );
@@ -434,7 +403,6 @@ BEGIN
               );
         END;
 
-        -- 5. Insert any missing genres into genres
         INSERT INTO genres (GenreName)
         SELECT ag.GenreName
         FROM @AllGenres ag
@@ -444,7 +412,6 @@ BEGIN
             WHERE g.GenreName = ag.GenreName
         );
 
-        -- 6. Insert main genre links
         IF @MainGenres IS NOT NULL AND LTRIM(RTRIM(@MainGenres)) <> ''
         BEGIN
             INSERT INTO book_genres (BookID, GenreID, GenreType)
@@ -458,7 +425,6 @@ BEGIN
             WHERE LTRIM(RTRIM(s.value)) <> '';
         END;
 
-        -- 7. Insert secondary genre links
         IF @SecondaryGenres IS NOT NULL AND LTRIM(RTRIM(@SecondaryGenres)) <> ''
         BEGIN
             INSERT INTO book_genres (BookID, GenreID, GenreType)
