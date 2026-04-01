@@ -23,8 +23,29 @@ SELECT
     vd.ParentSeriesName,
     vd.UniverseName,
     vd.BookNumber,
-    vd.UniverseReadingOrder
+    vd.UniverseReadingOrder,
+    STRING_AGG(
+        CASE WHEN bg.GenreType = 'Main' THEN g.GenreName END,
+        ', '
+    ) AS MainGenres,
+    STRING_AGG(
+        CASE WHEN bg.GenreType = 'Secondary' THEN g.GenreName END,
+        ', '
+    ) AS SecondaryGenres
 FROM vw_book_details vd
+LEFT JOIN book_genres bg
+    ON bg.BookID = vd.BookID
+LEFT JOIN genres g
+    ON g.GenreID = bg.GenreID
+GROUP BY
+    vd.BookID,
+    vd.Title,
+    vd.Authors,
+    vd.SeriesName,
+    vd.ParentSeriesName,
+    vd.UniverseName,
+    vd.BookNumber,
+    vd.UniverseReadingOrder
 ORDER BY
     vd.Authors, vd.SeriesName, vd.Title;
 """
@@ -71,7 +92,7 @@ df = df.merge(rating_pivot, on="BookID", how="left")
 
 df["SortOrder"] = df["UniverseReadingOrder"].fillna(df["BookNumber"])
 
-search = st.text_input("Search by title, author, series name, or universe")
+search = st.text_input("Search by title, author, series, universe, or genre")
 
 filter_col1, filter_col2 = st.columns(2)
 
@@ -83,7 +104,7 @@ with filter_col1:
 
 with filter_col2:
     reader_filter = st.selectbox(
-        "Show statuses for",
+        "Filter reader columns",
         ["All Readers"] + reader_names
     )
 
@@ -93,6 +114,8 @@ if search:
         | df["Authors"].str.contains(search, case=False, na=False)
         | df["SeriesName"].fillna("").str.contains(search, case=False, na=False)
         | df["UniverseName"].fillna("").str.contains(search, case=False, na=False)
+        | df["MainGenres"].fillna("").str.contains(search, case=False, na=False)
+        | df["SecondaryGenres"].fillna("").str.contains(search, case=False, na=False)
     )
     df = df[mask]
 
@@ -130,6 +153,8 @@ df_display = df.rename(columns={
     "SeriesName": "Series",
     "BookNumber": "Book #",
     "UniverseReadingOrder": "Universe Order",
+    "MainGenres": "Main Genre(s)",
+    "SecondaryGenres": "Secondary Genre(s)",
 })
 
 status_map = {
@@ -155,6 +180,8 @@ display_columns = [
     "Universe",
     "Series",
     "Book #",
+    "Main Genre(s)",
+    "Secondary Genre(s)",
     "Universe Order",
 ]
 
