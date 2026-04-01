@@ -1,5 +1,5 @@
 import streamlit as st
-from db import run_query, render_pdf_to_images
+from db import run_query, get_pdf_page_count, render_pdf_page
 
 st.title("💌 Cozy Corner Book Club")
 st.markdown("Browse monthly flyers and view the books selected for each month.")
@@ -25,9 +25,16 @@ month_options = {
     for _, row in months_df.iterrows()
 }
 
-selected_label = st.selectbox("📚 Select Book Club Month", list(month_options.keys()))
-selected_club_id = month_options[selected_label]
+selected_label = st.selectbox(
+    "📚 Select Book Club Month",
+    ["— Select a month —"] + list(month_options.keys())
+)
 
+if selected_label == "— Select a month —":
+    st.info("Select a month to view its books and flyer preview.")
+    st.stop()
+
+selected_club_id = month_options[selected_label]
 selected_month = months_df[months_df["ClubID"] == selected_club_id].iloc[0]
 
 club_month = selected_month["ClubMonth"]
@@ -61,7 +68,7 @@ if books_df.empty:
 else:
     display_books = books_df.copy()
     display_books["DisplayOrder"] = display_books["DisplayOrder"].fillna("")
-    st.dataframe(display_books, width='stretch', hide_index=True)
+    st.dataframe(display_books, width="stretch", hide_index=True)
 
 st.divider()
 
@@ -70,9 +77,46 @@ st.subheader("Flyer Preview")
 
 if flyer_path:
     try:
-        flyer_images = render_pdf_to_images(flyer_path)
-        for i, image_bytes in enumerate(flyer_images, start=1):
-            st.image(image_bytes, caption=f"Flyer Page {i}", width='content')
+        total_pages = get_pdf_page_count(flyer_path)
+
+        page_key = f"flyer_page_{selected_club_id}"
+
+        # Initialize page state for this flyer
+        if page_key not in st.session_state:
+            st.session_state[page_key] = 1
+
+        # Keep page in valid range
+        if st.session_state[page_key] < 1:
+            st.session_state[page_key] = 1
+        if st.session_state[page_key] > total_pages:
+            st.session_state[page_key] = total_pages
+
+        prev_col, info_col, next_col = st.columns([1, 2, 1])
+
+        with prev_col:
+            if st.button("⬅ Previous", key=f"prev_{selected_club_id}", use_container_width=True):
+                if st.session_state[page_key] > 1:
+                    st.session_state[page_key] -= 1
+
+
+        with next_col:
+            if st.button("Next ➡", key=f"next_{selected_club_id}", use_container_width=True):
+                if st.session_state[page_key] < total_pages:
+                    st.session_state[page_key] += 1
+
+        selected_page = st.number_input(
+            "Page",
+            min_value=1,
+            max_value=total_pages,
+            step=1,
+            key=page_key
+        )
+
+        with st.spinner("Loading flyer page..."):
+            page_image = render_pdf_page(flyer_path, selected_page)
+
+        st.image(page_image, caption=f"Flyer Page {selected_page}", width="stretch")
+
     except FileNotFoundError:
         st.warning(f"Flyer file not found: {flyer_path}")
     except Exception as e:
