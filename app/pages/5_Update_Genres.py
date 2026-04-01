@@ -27,7 +27,6 @@ selected_book = book_options[selected_label]
 selected_book_id = selected_book["BookID"]
 selected_title = selected_book["Title"]
 selected_authors = selected_book["Authors"]
-selected_author_for_proc = selected_authors.split(",")[0].strip()
 
 # Query current genre info for selected book
 genre_df = run_query("""
@@ -90,8 +89,7 @@ if st.button("💾 Save Genre Update", width='stretch'):
         execute_procedure(
             "UpdateBookGenres",
             [
-                selected_title,
-                selected_author_for_proc,
+                selected_book_id,
                 main_genres if main_genres.strip() else None,
                 secondary_genres if secondary_genres.strip() else None,
             ],

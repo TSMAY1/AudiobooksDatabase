@@ -11,11 +11,9 @@ st.markdown(
 STATUS_OPTIONS = ["Unread", "TBR", "Reading", "Read", "DNF"]
 RATING_ALLOWED_STATUSES = {"Read", "DNF"}
 
-
-def get_first_author(authors: str) -> str:
-    """Return the first author for stored procedures that expect one author name."""
-    return authors.split(",")[0].strip()
-
+def load_readers():
+    df = run_query("SELECT ReaderName FROM readers ORDER BY ReaderName;")
+    return df["ReaderName"].tolist()
 
 def get_current_reader_book_status(book_id: int, reader_name: str) -> tuple[str, float | None]:
     """
@@ -83,10 +81,8 @@ selected_book = book_options[selected_label]
 
 selected_book_id = selected_book["BookID"]
 selected_title = selected_book["Title"]
-selected_authors = selected_book["Authors"]
-selected_author_for_proc = get_first_author(selected_authors)
 
-reader = st.selectbox("👤 Select Reader", ["Angela", "Tori"])
+reader = st.selectbox("👤 Select Reader", load_readers())
 
 current_status, current_rating = get_current_reader_book_status(selected_book_id, reader)
 
@@ -142,8 +138,7 @@ if submitted:
         execute_procedure(
             "SetReadingStatus",
             [
-                selected_title,
-                selected_author_for_proc,
+                selected_book_id,
                 reader,
                 new_status,
             ],
@@ -154,8 +149,7 @@ if submitted:
             execute_procedure(
                 "SetReaderRating",
                 [
-                    selected_title,
-                    selected_author_for_proc,
+                    selected_book_id,
                     reader,
                     new_rating,
                 ],

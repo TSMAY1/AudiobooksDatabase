@@ -6,12 +6,8 @@ st.markdown(
     "View a reader’s current **To Be Read** list and add new books to it."
 )
 
-READERS = ["Angela", "Tori"]
-
-
-def get_first_author(authors: str) -> str:
-    """Return the first author name for procedures that expect a single author."""
-    return authors.split(",")[0].strip()
+readers_df = run_query("SELECT ReaderName FROM readers ORDER BY ReaderName;")
+READERS = readers_df["ReaderName"].tolist()
 
 
 def load_tbr_books(reader_name: str):
@@ -158,8 +154,7 @@ else:
             execute_procedure(
                 "SetReadingStatus",
                 [
-                    selected_book["Title"],
-                    get_first_author(selected_book["Authors"]),
+                    selected_book["BookID"],
                     selected_reader,
                     "TBR",
                 ],
@@ -185,6 +180,7 @@ if tbr_df.empty:
 else:
     remove_options = {
         f"{row['Title']} — {row['Authors']}": {
+            "BookID": row["BookID"],
             "Title": row["Title"],
             "Authors": row["Authors"],
         }
@@ -202,8 +198,7 @@ else:
             execute_procedure(
                 "SetReadingStatus",
                 [
-                    remove_book["Title"],
-                    get_first_author(remove_book["Authors"]),
+                    remove_book["BookID"],
                     selected_reader,
                     "Unread",
                 ],
