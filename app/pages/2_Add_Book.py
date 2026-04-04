@@ -80,7 +80,7 @@ if submitted:
             ],
         )
 
-        st.success("Book added successfully.")
+        st.success(f"Book added successfully: {title}")
 
     except Exception as e:
         st.error(f"Error: {e}")
