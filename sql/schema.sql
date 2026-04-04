@@ -106,7 +106,7 @@ CREATE TABLE mini_book_status (
     ReaderID INT NOT NULL,
     BookID INT NOT NULL,
     IsPrinted BIT NOT NULL DEFAULT 0,
-    IsCrafted BIT NOT NULL DEFAULT 0 CHECK (IsCrafted >= IsPrinted), -- Can't be crafted if it's not printed
+    IsCrafted BIT NOT NULL DEFAULT 0 CHECK (IsCrafted <= IsPrinted), -- Can't be crafted if it's not printed
 
     PRIMARY KEY (ReaderID, BookID),
     FOREIGN KEY (ReaderID) REFERENCES readers(ReaderID),
