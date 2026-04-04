@@ -117,20 +117,165 @@ JOIN authors_new a
 GROUP BY c.ClubID, c.ClubMonth, c.FlyerTheme, bcm.DisplayOrder, b.BookID, b.Title;
 GO
 
+-- View what mini books need to be printed for each reader
+
+CREATE OR ALTER VIEW vw_reader_mini_books_to_print AS
+SELECT
+    r.ReaderID,
+    r.ReaderName,
+    b.BookID,
+    bd.Authors,
+    b.Title,
+    bd.SeriesName,
+    bd.BookNumber,
+    rs.ReadingStatus,
+    ISNULL(mbs.IsPrinted, 0) AS IsPrinted,
+    ISNULL(mbs.IsCrafted, 0) AS IsCrafted
+FROM reading_status rs
+JOIN readers r
+    ON r.ReaderID = rs.ReaderID
+JOIN books b
+    ON b.BookID = rs.BookID
+JOIN vw_book_details bd
+    ON bd.BookID = b.BookID
+LEFT JOIN mini_book_status mbs
+    ON mbs.ReaderID = rs.ReaderID
+   AND mbs.BookID = rs.BookID
+WHERE rs.ReadingStatus = 'Read'
+  AND (
+        mbs.BookID IS NULL
+        OR mbs.IsPrinted = 0
+      );
+GO
+
+-- View what mini books have been printed, but not yet crafted, for each reader
+
+CREATE OR ALTER VIEW vw_reader_mini_books_printed_not_crafted AS
+SELECT
+    r.ReaderID,
+    r.ReaderName,
+    b.BookID,
+    bd.Authors,
+    b.Title,
+    bd.SeriesName,
+    bd.BookNumber,
+    rs.ReadingStatus,
+    mbs.IsPrinted,
+    mbs.IsCrafted
+FROM mini_book_status mbs
+JOIN readers r
+    ON r.ReaderID = mbs.ReaderID
+JOIN books b
+    ON b.BookID = mbs.BookID
+JOIN vw_book_details bd
+    ON bd.BookID = b.BookID
+LEFT JOIN reading_status rs
+    ON rs.ReaderID = mbs.ReaderID
+   AND rs.BookID = mbs.BookID
+WHERE mbs.IsPrinted = 1
+  AND mbs.IsCrafted = 0;
+GO
+
+-- Completed mini books view
+
+CREATE OR ALTER VIEW vw_reader_mini_books_crafted_complete AS
+SELECT
+    r.ReaderID,
+    r.ReaderName,
+    b.BookID,
+    bd.Authors,
+    b.Title,
+    bd.SeriesName,
+    bd.BookNumber,
+    rs.ReadingStatus,
+    mbs.IsPrinted,
+    mbs.IsCrafted
+FROM mini_book_status mbs
+JOIN readers r
+    ON r.ReaderID = mbs.ReaderID
+JOIN books b
+    ON b.BookID = mbs.BookID
+JOIN vw_book_details bd
+    ON bd.BookID = b.BookID
+LEFT JOIN reading_status rs
+    ON rs.ReaderID = mbs.ReaderID
+   AND rs.BookID = mbs.BookID
+WHERE mbs.IsPrinted = 1
+  AND mbs.IsCrafted = 1;
+GO
+
+SELECT
+    ReaderName,
+    Authors,
+    Title,
+    SeriesName,
+    BookNumber,
+    ReadingStatus
+FROM vw_reader_mini_books_crafted_complete
+ORDER BY ReaderName, Authors, SeriesName, BookNumber, Title;
 
 
+-- mini books dashboard view with buckets
 
+CREATE OR ALTER VIEW vw_reader_mini_books_dashboard AS
+SELECT
+    r.ReaderID,
+    r.ReaderName,
+    b.BookID,
+    bd.Authors,
+    b.Title,
+    bd.SeriesName,
+    bd.BookNumber,
+    rs.ReadingStatus,
+    ISNULL(mbs.IsPrinted, 0) AS IsPrinted,
+    ISNULL(mbs.IsCrafted, 0) AS IsCrafted,
+    CASE
+        WHEN rs.ReadingStatus = 'Read'
+             AND (mbs.BookID IS NULL OR ISNULL(mbs.IsPrinted, 0) = 0)
+            THEN 'To Print'
+        WHEN ISNULL(mbs.IsPrinted, 0) = 1
+             AND ISNULL(mbs.IsCrafted, 0) = 0
+            THEN 'Printed Not Crafted'
+        WHEN ISNULL(mbs.IsPrinted, 0) = 1
+             AND ISNULL(mbs.IsCrafted, 0) = 1
+            THEN 'Completed'
+        ELSE NULL
+    END AS MiniBookStage
+FROM reading_status rs
+JOIN readers r
+    ON r.ReaderID = rs.ReaderID
+JOIN books b
+    ON b.BookID = rs.BookID
+JOIN vw_book_details bd
+    ON bd.BookID = b.BookID
+LEFT JOIN mini_book_status mbs
+    ON mbs.ReaderID = rs.ReaderID
+   AND mbs.BookID = rs.BookID
+WHERE
+    (
+        rs.ReadingStatus = 'Read'
+        AND (mbs.BookID IS NULL OR ISNULL(mbs.IsPrinted, 0) = 0)
+    )
+    OR (
+        ISNULL(mbs.IsPrinted, 0) = 1
+        AND ISNULL(mbs.IsCrafted, 0) = 0
+    )
+    OR (
+        ISNULL(mbs.IsPrinted, 0) = 1
+        AND ISNULL(mbs.IsCrafted, 0) = 1
+    );
+GO
 
+-- mini books dashboard summary with counts
 
-
-
-
-
-
-
-
-
-
+CREATE OR ALTER VIEW vw_reader_mini_books_dashboard_summary AS
+SELECT
+    ReaderName,
+    MiniBookStage,
+    COUNT(*) AS BookCount
+FROM vw_reader_mini_books_dashboard
+GROUP BY ReaderName, MiniBookStage;
+GO
 
 
 

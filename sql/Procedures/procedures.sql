@@ -448,3 +448,91 @@ BEGIN
     END CATCH
 END;
 GO
+
+
+--------------------------------------------------
+-- SetMiniBookStatus
+-- Updates the IsPrinted and IsCrafted status for a mini book for a specified reader
+--------------------------------------------------
+
+CREATE OR ALTER PROCEDURE SetMiniBookStatus
+    @BookID INT,
+    @ReaderName NVARCHAR(255),
+    @IsPrinted BIT,
+    @IsCrafted BIT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+
+    BEGIN TRANSACTION;
+
+    BEGIN TRY
+        DECLARE @ReaderID INT;
+
+        -- Validate book exists
+        IF NOT EXISTS (
+            SELECT 1
+            FROM books
+            WHERE BookID = @BookID
+        )
+        BEGIN
+            RAISERROR('Book not found.', 16, 1);
+        END;
+
+        -- Find reader
+        SELECT @ReaderID = ReaderID
+        FROM readers
+        WHERE ReaderName = LTRIM(RTRIM(@ReaderName));
+
+        IF @ReaderID IS NULL
+        BEGIN
+            RAISERROR('Reader not found.', 16, 1);
+        END;
+
+        -- Prevent impossible state
+        IF @IsCrafted = 1 AND @IsPrinted = 0
+        BEGIN
+            RAISERROR('A mini book cannot be crafted unless it has been printed.', 16, 1);
+        END;
+
+        -- Update if row already exists
+        IF EXISTS (
+            SELECT 1
+            FROM mini_book_status
+            WHERE ReaderID = @ReaderID
+              AND BookID = @BookID
+        )
+        BEGIN
+            UPDATE mini_book_status
+            SET IsPrinted = @IsPrinted,
+                IsCrafted = @IsCrafted
+            WHERE ReaderID = @ReaderID
+              AND BookID = @BookID;
+        END
+        ELSE
+        BEGIN
+            INSERT INTO mini_book_status (
+                ReaderID,
+                BookID,
+                IsPrinted,
+                IsCrafted
+            )
+            VALUES (
+                @ReaderID,
+                @BookID,
+                @IsPrinted,
+                @IsCrafted
+            );
+        END;
+
+        COMMIT TRANSACTION;
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0
+            ROLLBACK TRANSACTION;
+
+        THROW;
+    END CATCH
+END;
+GO

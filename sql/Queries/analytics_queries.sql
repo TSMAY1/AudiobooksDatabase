@@ -162,4 +162,13 @@ WHERE Rating IS NOT NULL
 ORDER BY Rating DESC, Title;
 GO
 
+-- Mini book workflow
+SELECT *
+FROM vw_reader_mini_books_dashboard
+ORDER BY ReaderName, MiniBookStage, Authors, SeriesName, BookNumber, Title;
 
+
+-- Mini books by status & reader
+SELECT *
+FROM vw_reader_mini_books_dashboard_summary
+ORDER BY ReaderName, MiniBookStage;
