@@ -130,7 +130,7 @@ with st.form("reading_status_form"):
         save_rating = False
         st.caption("Rating is only available for Read and DNF.")
 
-    submitted = st.form_submit_button("💾 Save Reading Status", use_container_width=True)
+    submitted = st.form_submit_button("💾 Save Reading Status", width='stretch')
 
 if submitted:
     try:

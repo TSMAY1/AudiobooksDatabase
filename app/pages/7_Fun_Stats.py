@@ -17,7 +17,7 @@ def show_bar_chart(df, category_col, value_col, title):
         title=title
     )
 
-    st.altair_chart(chart, use_container_width=True)
+    st.altair_chart(chart, width='stretch')
 
 
 def load_readers():

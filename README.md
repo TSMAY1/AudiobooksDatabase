@@ -1,79 +1,219 @@
 # Audiobooks Database Schema
 
-This project implements a relational SQL database that tracks audiobook metadata, reader activity, genres, and Cozy Corner Book Club selections.
+<p align="center">
+  <img src="assets/images/mini-books-dashboard.png" width="900">
+</p>
 
-It supports:
+<p align="center">
+  <em>Mini Book workflow dashboard with stage tracking, quick actions, and guided next steps</em>
+</p>
 
-- reader-specific ratings
-- many-to-many relationships (authors, genres)
-- normalized schema design
-- reusable views and stored procedures for common workflows
+This project is a fully normalized SQL Server database paired with a Streamlit web application for managing audiobook collections, reader activity, and physical “mini book” crafting workflows.
 
-This project began as a hands-on SQL learning exercise and evolved into a fully normalized, queryable database system.
+Originally built as a hands-on SQL learning project, it has evolved into a feature-rich data system with real-world workflows, automation logic, and a user interface.
+
+## Key Features
+
+### Core Library Management
+
+- Normalized book, author, and series structure
+- Many-to-many relationships for:
+    - Authors (`book_authors`)
+    - Genres (`book_genres`)
+- Support for:
+    - Series and parent series (universe grouping)
+    - Book ordering within series and universes
+
+### Reader Tracking System
+
+- Per-reader:
+    - Reading status (Unread, TBR, Reading, Read, DNF)
+    - Ratings (0–5 scale)
+- Fully normalized via `reading_status`
+
+### Mini Book Workflow System (NEW)
+
+A custom workflow for tracking physical mini book creation:
+- Tracks per-reader progress
+    - `IsPrinted`
+    - `IsCrafted`
+- Enforced business rule:
+    - A mini book cannot be crafted unless it is printed
+
+Workflow stages are automatically derived via view:
+- To Print
+- Printed Not Crafted
+- Completed
+
+Supported by:
+- `mini_book_status` table
+- `vw_reader_mini_books_dashboard`
+- `vw_reader_mini_books_dashboard_summary`
+- `SetMiniBookStatus` stored procedure
+
+### Cozy Corner Book Club
+- Monthly book selections
+- Themed reading lists
+- PDF flyer + calendar integration
+
+## Streamlit Web App
+
+
+The project includes a multi-page Streamlit interface that allows users to interact with the database through a clean, workflow-driven UI.
+
+---
+
+### Mini Book Workflow Dashboard
+
+<p align="center">
+  <img src="assets/images/mini-books-dashboard.png" width="850">
+</p>
+
+- Track progress across workflow stages:
+  - To Print
+  - Printed Not Crafted
+  - Completed
+- Visual status indicators and next-step guidance
+- One-click updates for printing and crafting actions
+
+---
+
+### Library View
+
+<p align="center">
+  <img src="assets/images/library-page.png" width="850">
+</p>
+
+- Search by title, author, series, universe, or genre
+- View reader-specific progress and ratings
+- Explore structured series and universe relationships
+
+---
+
+### Reading Status Management
+
+<p align="center">
+  <img src="assets/images/reading-status-page.png" width="850">
+</p>
+
+- Update reading progress per user
+- Assign ratings dynamically
+- Supports multiple reading states (Unread, TBR, Reading, Read, DNF)
+
+---
+
+### Cozy Corner Book Club
+
+<p align="center">
+  <img src="assets/images/book-club-page.png" width="850">
+</p>
+
+- Monthly themed reading lists
+- Ordered book selections
+- Integrated flyer preview system
+
+## Database Schema Overview
+
+<p align="center">
+  <img src="assets/images/schema-diagram.png" width="750">
+</p>
+
+The database is fully normalized and designed to support:
+- complex relationships (many-to-many)
+- multi-user tracking
+- workflow-driven features (mini books)
+
+### Core Tables
+
+`books` - audiobook metadata
+
+`authors_new` - normalized author list
+
+`book_authors` - many-to-many book to author
+
+`series` - series and universe hierarchy
+
+`genres` / `book_genres` - categorized tagging
+
+`readers` - users
+
+`reading_status`- reader activity and ratings
+
+`mini_book_status` - mini book workflow tracking
+
+`cozy_corner_book_club` - monthly book club records
+
+`bookclub_monthly_books` - book selections per month
+
+`bookclub_calendars` - yearly planning data
+
+### Relationships
+
+Books ↔ Authors → many-to-many
+Books ↔ Genres → many-to-many
+Readers ↔ Books → via `reading_status`
+Readers ↔ Mini Books → via `mini_book_status`
+Book Club ↔ Books → monthly selections
+
+### Key Views
+
+Views are heavily used to simplify logic and support the UI:
+
+**Core Views**
+- vw_book_details
+    → Aggregated authors, series, and universe data
+- vw_reader_books
+    → Reader activity across all books
+**Mini Book Workflow Views**
+- vw_reader_mini_books_dashboard
+    → Assigns workflow stage per book
+- vw_reader_mini_books_dashboard_summary
+    → Aggregated counts per stage
+- Stage-specific views:
+    - To print
+    - Printed not crafted
+    - Completed
+
+### Stored Procedures
+
+Encapsulate reusable business logic:
+
+- AddBook
+    → Inserts book + authors + genres + seeds reader status
+- SetReadingStatus
+    → Updates reader progress (Unread → Read, etc.)
+- SetReaderRating
+    → Assigns ratings with validation
+- UpdateBookGenres
+    → Replaces genre assignments
+- SetMiniBookStatus
+    → Handles mini book workflow updates with constraints
 
 ## Getting Started
 
-This project consists of two parts:
-
-1. A SQL Server database
-2. A Streamlit web interface
-
-Follow the steps below to set up both.
-
-### 1. Set Up the Database (SQL Server)
-
-Create a new database:
-
-1. Create a new database:
+1. Create Database
 
 ```sql
 CREATE DATABASE Audiobooks;
 ```
 
-2. Run the schema:
+Run:
 
 ```plaintext
 schema.sql
-```
-
-3. Insert sample data:
-
-```plaintext
 seed_data.sql
-```
-
-4. (Optional) Create reusable objects:
-```plaintext
 views.sql  
 procedures.sql
 ```
 
-5. Explore queries:
-```plaintext
-basic_queries.sql  
-analytics_queries.sql
-```
-
-2. Run the Streamlit App
+2. Run the App
 
 Create and activate a virtual environment:
 
 ```bash
 python -m venv .venv
-.venv\Scripts\activate   # Windows
-# or
-source .venv/bin/activate  # Mac/Linux
-```
-
-Install dependencies:
-
-```bash
+.venv\Scripts\activate
 pip install -r requirements.txt
-```
-
-Run the app:
-
-```bash
 streamlit run app/app.py
 ```
 
@@ -97,61 +237,31 @@ streamlit run app/app.py
 ├── README.md
 ```
 
-## Core Tables
+## Design Highlights
+- Fully normalized relational schema
+- Strong use of:
+    - junction tables
+    - aggregation (`STRING_AGG`)
+    - computed workflow states via views
+- Separation of concerns:
+    - SQL = business logic
+    - Streamlit = presentation layer
+- Transaction-safe stored procedures (`XACT_ABORT`, transactions)
+- Constraint-driven integrity:
+    - e.g. mini book crafting rules
 
-**books** - audiobook metadata
+## Analytics Highlights
 
-**authors_new** - normalized author list
+Example insights supported by this database:
 
-**book_authors** - many-to-many book to author
+- Books read per reader
+- Shared books between readers
+- Average ratings per reader
+- Most-read genres
+- Highest-rated books
+- Reader-specific top books
 
-**series** - book series
-
-**readers** - users
-
-**reading_status** - reader activity and ratings
-
-**genres** - genre reference
-
-**book_genres** - many-to-many book to genre
-
-**cozy_corner_book_club** - monthly book club records
-
-**bookclub_monthly_books** - book selections per month
-
-**bookclub_calendars** - yearly planning data
-
-## Relationships
-
-- A book belongs to one series
-
-- A book can have multiple authors via `book_authors`
-
-- A reader interacts with books via `reading_status`
-
-- Books can have multiple genres via `book_genres`
-
-- book club selections are tracked via `bookclub_monthly_books`
-
-## Diagram
-
-```plaintext
-
-authors_new
-   │
-   └───< book_authors >─── books >─── series
-                                │
-                                ├───< book_genres >─── genres
-                                │
-                                ├───< reading_status >─── readers
-                                │
-                                └───< bookclub_monthly_books >─── cozy_corner_book_club
-
-bookclub_calendars
-
-```
-
-## Example Query (Using Views)
+## Example Query
 
 *Example: Display books read by a specific reader with aggregated authors*
 ```sql
@@ -166,107 +276,19 @@ ORDER BY Authors, SeriesName, BookNumber;
 GO
 ```
 
-## Views
-
-Views were used to simplify complex joins and improve query readability
-
-Key examples:
-
-`vw_book_details`
-→ Aggregated book metadata (authors, series, order)
-
-`vw_reader_books`
-→ Reader activity across all books
-
-`vw_bookclub_books`
-→ Book club selections with display order
-
-`vw_angela_read_books`, `vw_tori_read_books`
-→ Reader-specific book lists with ratings
-
-## Stored Procedures
-
-Created procedures to utilize reusable, parameterized operations
-
-`AddBook`
-→ Inserts a book and links authors and genres
-
-`SetReaderRating`
-→ Updates or inserts a reader’s rating
-
-`SetReadingStatus`
-→ Marks a book as unread/TBR/reading/read/DNF
-
-`UpdateBookGenres`
-→ Replaces a book’s genre assignments
-
-## Analytics Highlights
-
-Example insights supported by this database:
-
-- Books read per reader
-- Shared books between readers
-- Average ratings per reader
-- Most-read genres
-- Highest-rated books
-- Reader-specific top books
-
-## Schema Refactor: Before vs After
-
-#### Before (Initial Design)
-
-In the original schema, each book was linked to a single author using a direct foreign key:
-
-authors ───< books >─── series
-
-- `books.AuthorID` referenced `authors.AuthorID`
-
-- Each row in `authors` sometimes contained multiple authors in a single string
-
-        Example: "A.R. Capetta, Cory McCarthy"
-
-- This made it difficult to:
-
-    - Accurately query individual authors
-
-    - Handle co-authored books
-
-    - Prevent duplicate or inconsistent author entries
-
-
-#### After (Normalized Design)
-
-The schema was refactored to support a proper many-to-many relationship between books and authors:
-
-authors_new ───< book_authors >─── books >─── series
-
-- `authors_new` contains one row per individual author
-
-- `book_authors` acts as a junction table:
-
-    - One book -> many authors
-
-    - One author -> many books
-
-## Key Highlights
-
-- Fully normalized relational schema
-- Many-to-many relationships (authors, genres)
-- Reader-specific rating system
-- Aggregation-heavy analytics queries
-- Reusable views for simplified querying
-- Stored procedures for real-world workflows
-
 ## Future Improvements
 
-- Refactor queries to rename authors_new to authors
-
-- Add role support (e.g., Author, Translator, Narrator) for contributors
-
-- Expand analytics (e.g., top authors, co-author frequency, trends)
-
-- Connect yearly calendars to monthly book club data
+- Role-based contributors (Author / Narrator / Translator)
+- Advanced analytics dashboards
+- Cloud deployment (replace local SQL dependency)
+- API layer between app and database
+- Enhanced filtering + search UX in Streamlit
 
 ## Notes
 
-This project reflects iterative database design improvements and real-world data challenges, including normalization, data cleaning, and query optimization.
+This project reflects iterative database design improvements, including:
+
+- schema normalization
+- real-world workflow modeling
+- UI-driven database evolution
+- debugging and performance tuning

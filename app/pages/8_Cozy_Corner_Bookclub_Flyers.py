@@ -94,13 +94,13 @@ if flyer_path:
         prev_col, info_col, next_col = st.columns([1, 2, 1])
 
         with prev_col:
-            if st.button("⬅ Previous", key=f"prev_{selected_club_id}", use_container_width=True):
+            if st.button("⬅ Previous", key=f"prev_{selected_club_id}", width='stretch'):
                 if st.session_state[page_key] > 1:
                     st.session_state[page_key] -= 1
 
 
         with next_col:
-            if st.button("Next ➡", key=f"next_{selected_club_id}", use_container_width=True):
+            if st.button("Next ➡", key=f"next_{selected_club_id}", width='stretch'):
                 if st.session_state[page_key] < total_pages:
                     st.session_state[page_key] += 1
 

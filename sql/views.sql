@@ -96,15 +96,18 @@ GO
 -- book club view
 
 CREATE OR ALTER VIEW vw_bookclub_books AS
-
 SELECT 
     c.ClubID,
     c.ClubMonth,
+    c.YearNum,
+    c.MonthNum,
     c.FlyerTheme,
-	bcm.DisplayOrder,
-	b.BookID,
+    c.FlyerFilePath,
+    cal.CalendarFilePath,
+    bcm.DisplayOrder,
+    b.BookID,
     b.Title,
-    STRING_AGG(a.AuthorName, ', ') AS Authors
+    STRING_AGG(a.AuthorName, ', ') WITHIN GROUP (ORDER BY ba.AuthorOrder, a.AuthorName) AS Authors
 FROM cozy_corner_book_club c
 JOIN bookclub_monthly_books bcm 
     ON c.ClubID = bcm.ClubID
@@ -114,7 +117,19 @@ JOIN book_authors ba
     ON b.BookID = ba.BookID
 JOIN authors_new a 
     ON ba.AuthorID = a.AuthorID
-GROUP BY c.ClubID, c.ClubMonth, c.FlyerTheme, bcm.DisplayOrder, b.BookID, b.Title;
+LEFT JOIN bookclub_calendars cal
+    ON c.YearNum = cal.YearNum
+GROUP BY 
+    c.ClubID,
+    c.ClubMonth,
+    c.YearNum,
+    c.MonthNum,
+    c.FlyerTheme,
+    c.FlyerFilePath,
+    cal.CalendarFilePath,
+    bcm.DisplayOrder,
+    b.BookID,
+    b.Title;
 GO
 
 -- View what mini books need to be printed for each reader
@@ -203,17 +218,6 @@ LEFT JOIN reading_status rs
 WHERE mbs.IsPrinted = 1
   AND mbs.IsCrafted = 1;
 GO
-
-SELECT
-    ReaderName,
-    Authors,
-    Title,
-    SeriesName,
-    BookNumber,
-    ReadingStatus
-FROM vw_reader_mini_books_crafted_complete
-ORDER BY ReaderName, Authors, SeriesName, BookNumber, Title;
-
 
 -- mini books dashboard view with buckets
 
