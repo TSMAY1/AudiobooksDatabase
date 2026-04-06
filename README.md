@@ -150,10 +150,15 @@ The database is fully normalized and designed to support:
 ### Relationships
 
 Books ↔ Authors → many-to-many
+
 Books ↔ Genres → many-to-many
+
 Readers ↔ Books → via `reading_status`
+
 Readers ↔ Mini Books → via `mini_book_status`
+
 Book Club ↔ Books → monthly selections
+
 
 ### Key Views
 
