@@ -208,8 +208,6 @@ procedures.sql
 
 2. Run the App
 
-Create and activate a virtual environment:
-
 ```bash
 python -m venv .venv
 .venv\Scripts\activate
