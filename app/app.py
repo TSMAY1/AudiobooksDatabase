@@ -13,6 +13,7 @@ st.markdown(
     - Set Reading Status
     - Manage TBR
     - Update Genres
+    - Mini Books
     - Fun Stats
     - Cozy Corner Bookclub Flyers
     - Cozy Corner Bookclub Calendars
