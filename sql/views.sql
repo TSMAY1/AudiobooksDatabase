@@ -56,7 +56,8 @@ SELECT
     p.SeriesName AS ParentSeriesName,
     COALESCE(p.SeriesName, s.SeriesName) AS UniverseName,
     b.BookNumber,
-    b.UniverseReadingOrder
+    b.UniverseReadingOrder,
+    b.Full_Cast
 FROM books b
 JOIN book_authors ba
     ON ba.BookID = b.BookID
@@ -73,7 +74,8 @@ GROUP BY
     s.SeriesName,
     p.SeriesName,
     b.BookNumber,
-    b.UniverseReadingOrder;
+    b.UniverseReadingOrder,
+    b.Full_Cast;
 GO
 
 -- Reader activity view

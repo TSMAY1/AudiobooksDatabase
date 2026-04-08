@@ -31,7 +31,8 @@ SELECT
     STRING_AGG(
         CASE WHEN bg.GenreType = 'Secondary' THEN g.GenreName END,
         ', '
-    ) AS SecondaryGenres
+    ) AS SecondaryGenres,
+    vd.Full_Cast
 FROM vw_book_details vd
 LEFT JOIN book_genres bg
     ON bg.BookID = vd.BookID
@@ -45,7 +46,8 @@ GROUP BY
     vd.ParentSeriesName,
     vd.UniverseName,
     vd.BookNumber,
-    vd.UniverseReadingOrder
+    vd.UniverseReadingOrder,
+    vd.Full_Cast
 ORDER BY
     vd.Authors, vd.SeriesName, vd.Title;
 """
@@ -155,6 +157,7 @@ df_display = df.rename(columns={
     "UniverseReadingOrder": "Universe Order",
     "MainGenres": "Main Genre(s)",
     "SecondaryGenres": "Secondary Genre(s)",
+    "Full_Cast": "Full Cast Audio"
 })
 
 status_map = {
@@ -183,6 +186,7 @@ display_columns = [
     "Main Genre(s)",
     "Secondary Genre(s)",
     "Universe Order",
+    "Full Cast Audio"
 ]
 
 reader_columns = []
