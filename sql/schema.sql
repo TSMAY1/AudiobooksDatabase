@@ -133,3 +133,46 @@ CREATE TABLE mini_book_status (
         )
 );
 GO
+
+CREATE TABLE book_covers (
+    CoverID INT IDENTITY(1,1) PRIMARY KEY,
+    BookID INT NOT NULL,
+    CoverLabel NVARCHAR(100) NULL,
+    ImageFilePath NVARCHAR(500) NOT NULL,
+    ImageFormat NVARCHAR(20) NOT NULL,
+    WidthPx INT NOT NULL,
+    HeightPx INT NOT NULL,
+    FileSizeKB DECIMAL(10,2) NULL,
+    ImageHash NVARCHAR(64) NULL,
+    SortOrder INT NOT NULL
+        CONSTRAINT DF_book_covers_SortOrder DEFAULT 1,
+    IsPrimary BIT NOT NULL
+        CONSTRAINT DF_book_covers_IsPrimary DEFAULT 0,
+    SourceNotes NVARCHAR(500) NULL,
+    DateAdded DATETIME2 NOT NULL
+        CONSTRAINT DF_book_covers_DateAdded DEFAULT SYSDATETIME(),
+
+    FOREIGN KEY (BookID) REFERENCES books(BookID),
+    CONSTRAINT CK_book_covers_WidthPx
+        CHECK (WidthPx > 0),
+    CONSTRAINT CK_book_covers_HeightPx
+        CHECK (HeightPx > 0),
+    CONSTRAINT CK_book_covers_FileSizeKB
+        CHECK (FileSizeKB IS NULL OR FileSizeKB > 0)
+);
+GO
+
+CREATE UNIQUE INDEX UX_book_covers_one_primary_per_book
+ON book_covers (BookID)
+WHERE IsPrimary = 1;
+GO
+
+CREATE INDEX IX_book_covers_BookID_SortOrder
+ON book_covers (BookID, SortOrder, CoverID);
+GO
+
+CREATE INDEX IX_book_covers_ImageHash
+ON book_covers (ImageHash)
+WHERE ImageHash IS NOT NULL;
+GO
+

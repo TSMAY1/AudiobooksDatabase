@@ -283,10 +283,46 @@ FROM vw_reader_mini_books_dashboard
 GROUP BY ReaderName, MiniBookStage;
 GO
 
+-- primary book covers view
 
+CREATE OR ALTER VIEW vw_book_primary_cover AS
+SELECT
+    bc.BookID,
+    bc.CoverID,
+    bc.CoverLabel,
+    bc.ImageFilePath,
+    bc.ImageFormat,
+    bc.WidthPx,
+    bc.HeightPx,
+    bc.FileSizeKB,
+    bc.ImageHash,
+    bc.SortOrder,
+    bc.DateAdded
+FROM book_covers bc
+WHERE bc.IsPrimary = 1;
+GO
 
+-- all cover options view
 
-
-
+CREATE OR ALTER VIEW vw_book_covers AS
+SELECT
+    bc.CoverID,
+    bc.BookID,
+    b.Title,
+    bc.CoverLabel,
+    bc.ImageFilePath,
+    bc.ImageFormat,
+    bc.WidthPx,
+    bc.HeightPx,
+    bc.FileSizeKB,
+    bc.ImageHash,
+    bc.SortOrder,
+    bc.IsPrimary,
+    bc.SourceNotes,
+    bc.DateAdded
+FROM book_covers bc
+JOIN books b
+    ON b.BookID = bc.BookID;
+GO
 
 
