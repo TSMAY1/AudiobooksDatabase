@@ -41,6 +41,7 @@ def clear_cover_caches():
     load_books_for_cover_manager.clear()
     get_book_covers.clear()
     load_cover_image_bytes.clear()
+    st.session_state["library_cache_buster"] = st.session_state.get("library_cache_buster", 0) + 1
 
 
 books_df = load_books_for_cover_manager()
