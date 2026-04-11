@@ -365,6 +365,7 @@ FodyWeavers.xsd
 # Ignore flyer and calendar folders
 Flyers/
 Calendars/
+Covers/
 *.pdf
 
 # Ignore the .vs folder
