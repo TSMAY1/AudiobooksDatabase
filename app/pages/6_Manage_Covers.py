@@ -139,7 +139,7 @@ else:
         with columns[idx % 3]:
             try:
                 image_bytes = load_cover_image_bytes(row["ImageFilePath"])
-                st.image(image_bytes, use_container_width=True)
+                st.image(image_bytes, width='stretch')
             except Exception:
                 st.warning("Image file could not be loaded.")
 

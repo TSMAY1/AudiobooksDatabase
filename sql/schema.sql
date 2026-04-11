@@ -9,6 +9,18 @@ CREATE TABLE series (
 );
 GO
 
+CREATE INDEX IX_series_SeriesName
+ON series (SeriesName);
+GO
+
+CREATE UNIQUE INDEX UX_series_SeriesName
+ON series (SeriesName);
+GO
+
+CREATE INDEX IX_series_ParentSeriesID
+ON series (ParentSeriesID);
+GO
+
 CREATE TABLE books (
     BookID INT PRIMARY KEY IDENTITY(1,1),
     Title NVARCHAR(255) NOT NULL,
@@ -22,6 +34,14 @@ CREATE TABLE books (
 
     FOREIGN KEY (SeriesID) REFERENCES series(SeriesID)
 );
+GO
+
+CREATE INDEX IX_books_SeriesID_BookNumber
+ON books (SeriesID, BookNumber);
+GO
+
+CREATE INDEX IX_books_Title
+ON books (Title);
 GO
 
 CREATE TABLE authors_new (
@@ -39,6 +59,10 @@ CREATE TABLE book_authors (
     FOREIGN KEY (BookID) REFERENCES books(BookID),
     FOREIGN KEY (AuthorID) REFERENCES authors_new(AuthorID)
 );
+GO
+
+CREATE INDEX IX_book_authors_AuthorID_BookID
+ON book_authors (AuthorID, BookID);
 GO
 
 CREATE TABLE genres (
@@ -59,10 +83,18 @@ CREATE TABLE book_genres (
 );
 GO
 
+CREATE INDEX IX_book_genres_GenreID_BookID
+ON book_genres (GenreID, BookID);
+GO
+
 CREATE TABLE readers (
     ReaderID INT PRIMARY KEY IDENTITY(1,1),
     ReaderName NVARCHAR(255) NOT NULL
 );
+GO
+
+CREATE UNIQUE INDEX UX_readers_ReaderName
+ON readers (ReaderName);
 GO
 
 CREATE TABLE reading_status (
@@ -78,6 +110,21 @@ CREATE TABLE reading_status (
     FOREIGN KEY (BookID) REFERENCES books(BookID)
 );
 GO
+
+CREATE INDEX IX_reading_status_BookID
+ON reading_status (BookID);
+GO
+
+CREATE INDEX IX_reading_status_ReaderID_ReadingStatus_BookID
+ON reading_status (ReaderID, ReadingStatus, BookID)
+INCLUDE (Rating);
+GO
+
+CREATE INDEX IX_reading_status_ReadingStatus_BookID
+ON reading_status (ReadingStatus, BookID)
+INCLUDE (ReaderID, Rating);
+GO
+
 
 CREATE TABLE bookclub_calendars (
     CalendarID INT IDENTITY(1,1) PRIMARY KEY,
@@ -117,6 +164,10 @@ CREATE TABLE bookclub_monthly_books (
 );
 GO
 
+CREATE INDEX IX_bookclub_monthly_books_BookID
+ON bookclub_monthly_books (BookID);
+GO
+
 CREATE TABLE mini_book_status (
     ReaderID INT NOT NULL,
     BookID INT NOT NULL,
@@ -132,6 +183,10 @@ CREATE TABLE mini_book_status (
             OR (IsCrafted = 1 AND IsPrinted = 1)
         )
 );
+GO
+
+CREATE INDEX IX_mini_book_status_BookID
+ON mini_book_status (BookID);
 GO
 
 CREATE TABLE book_covers (
