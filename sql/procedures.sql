@@ -536,3 +536,180 @@ BEGIN
     END CATCH
 END;
 GO
+
+
+--------------------------------------------------
+-- UpdateBookCoreDetails
+-- Updates the core metadata for an existing book
+-- Series is required; use 'Standalone' for non-series books
+--------------------------------------------------
+
+CREATE OR ALTER PROCEDURE UpdateBookCoreDetails
+    @BookID INT,
+    @Title NVARCHAR(255),
+    @SeriesName NVARCHAR(255),
+    @BookNumber DECIMAL(4,1) = NULL,
+    @UniverseReadingOrder DECIMAL(5,2) = NULL,
+    @LengthType NVARCHAR(50) = NULL,
+    @Demographic NVARCHAR(50) = NULL,
+    @Full_Cast BIT = NULL,
+    @Notes NVARCHAR(MAX) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+
+    BEGIN TRANSACTION;
+
+    BEGIN TRY
+        DECLARE @TrimmedTitle NVARCHAR(255) = LTRIM(RTRIM(@Title));
+        DECLARE @TrimmedSeriesName NVARCHAR(255) = LTRIM(RTRIM(@SeriesName));
+        DECLARE @SeriesID INT;
+
+        IF NOT EXISTS (
+            SELECT 1
+            FROM books
+            WHERE BookID = @BookID
+        )
+        BEGIN
+            RAISERROR('Book not found.', 16, 1);
+        END;
+
+        IF @TrimmedTitle = ''
+        BEGIN
+            RAISERROR('Title is required.', 16, 1);
+        END;
+
+        IF @TrimmedSeriesName = ''
+        BEGIN
+            RAISERROR('Series is required. Use Standalone for books that are not part of a series.', 16, 1);
+        END;
+
+        IF NOT EXISTS (
+            SELECT 1
+            FROM series
+            WHERE SeriesName = @TrimmedSeriesName
+        )
+        BEGIN
+            INSERT INTO series (SeriesName)
+            VALUES (@TrimmedSeriesName);
+        END;
+
+        SELECT @SeriesID = SeriesID
+        FROM series
+        WHERE SeriesName = @TrimmedSeriesName;
+
+        IF EXISTS (
+            SELECT 1
+            FROM books
+            WHERE BookID <> @BookID
+              AND Title = @TrimmedTitle
+              AND SeriesID = @SeriesID
+              AND (
+                    (@BookNumber IS NULL AND BookNumber IS NULL)
+                    OR BookNumber = @BookNumber
+                  )
+        )
+        BEGIN
+            RAISERROR('Another book already exists with this title, series, and book number.', 16, 1);
+        END;
+
+        UPDATE books
+        SET Title = @TrimmedTitle,
+            SeriesID = @SeriesID,
+            BookNumber = @BookNumber,
+            UniverseReadingOrder = @UniverseReadingOrder,
+            LengthType = NULLIF(LTRIM(RTRIM(@LengthType)), ''),
+            Demographic = NULLIF(LTRIM(RTRIM(@Demographic)), ''),
+            Full_Cast = @Full_Cast,
+            Notes = NULLIF(LTRIM(RTRIM(@Notes)), '')
+        WHERE BookID = @BookID;
+
+        COMMIT TRANSACTION;
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0
+            ROLLBACK TRANSACTION;
+
+        THROW;
+    END CATCH
+END;
+GO
+
+
+--------------------------------------------------
+-- UpdateBookAuthors
+-- Replaces the author list for an existing book
+--------------------------------------------------
+
+CREATE OR ALTER PROCEDURE UpdateBookAuthors
+    @BookID INT,
+    @Authors NVARCHAR(MAX)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+
+    BEGIN TRANSACTION;
+
+    BEGIN TRY
+        IF NOT EXISTS (
+            SELECT 1
+            FROM books
+            WHERE BookID = @BookID
+        )
+        BEGIN
+            RAISERROR('Book not found.', 16, 1);
+        END;
+
+        IF @Authors IS NULL OR LTRIM(RTRIM(@Authors)) = ''
+        BEGIN
+            RAISERROR('At least one author is required.', 16, 1);
+        END;
+
+        DECLARE @AuthorTable TABLE (
+            AuthorOrder INT IDENTITY(1,1),
+            AuthorName NVARCHAR(255)
+        );
+
+        INSERT INTO @AuthorTable (AuthorName)
+        SELECT LTRIM(RTRIM(value))
+        FROM STRING_SPLIT(@Authors, ',')
+        WHERE LTRIM(RTRIM(value)) <> '';
+
+        IF NOT EXISTS (SELECT 1 FROM @AuthorTable)
+        BEGIN
+            RAISERROR('At least one author is required.', 16, 1);
+        END;
+
+        INSERT INTO authors_new (AuthorName)
+        SELECT DISTINCT at.AuthorName
+        FROM @AuthorTable at
+        WHERE NOT EXISTS (
+            SELECT 1
+            FROM authors_new a
+            WHERE a.AuthorName = at.AuthorName
+        );
+
+        DELETE FROM book_authors
+        WHERE BookID = @BookID;
+
+        INSERT INTO book_authors (BookID, AuthorID, AuthorOrder)
+        SELECT
+            @BookID,
+            a.AuthorID,
+            at.AuthorOrder
+        FROM @AuthorTable at
+        JOIN authors_new a
+            ON a.AuthorName = at.AuthorName;
+
+        COMMIT TRANSACTION;
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0
+            ROLLBACK TRANSACTION;
+
+        THROW;
+    END CATCH
+END;
+GO
