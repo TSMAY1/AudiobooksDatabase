@@ -136,17 +136,21 @@ if filtered_df.empty:
     st.warning("No books matched your filters.")
     st.stop()
 
-# Read the incoming cross-page selection before limiting the list
-incoming_cover_book_id = st.session_state.pop("selected_cover_book_id", None)
+# Read one-time cross-page navigation state
+incoming_cover_book_id = st.session_state.pop("navigate_to_cover_book_id", None)
 
-# If the page is showing a limited list for speed, pin the incoming book into that list
+filtered_df = filtered_df.copy()
+filtered_df["BookID"] = filtered_df["BookID"].astype(int)
+
+# Figure out what book we want selected before creating the widget
+existing_selected_book_id = st.session_state.get("manage_covers_selected_book_id")
+preferred_book_id = incoming_cover_book_id or existing_selected_book_id
+
+# If the page is showing a limited list for speed, keep the preferred book pinned
 if not search and not only_missing and len(filtered_df) > 100:
-    filtered_df = filtered_df.copy()
-    filtered_df["BookID"] = filtered_df["BookID"].astype(int)
-
-    if incoming_cover_book_id is not None and incoming_cover_book_id in filtered_df["BookID"].tolist():
-        pinned_row = filtered_df[filtered_df["BookID"] == incoming_cover_book_id]
-        remainder = filtered_df[filtered_df["BookID"] != incoming_cover_book_id].head(99)
+    if preferred_book_id is not None and preferred_book_id in filtered_df["BookID"].tolist():
+        pinned_row = filtered_df[filtered_df["BookID"] == preferred_book_id]
+        remainder = filtered_df[filtered_df["BookID"] != preferred_book_id].head(99)
         filtered_df = pd.concat([pinned_row, remainder], ignore_index=True)
     else:
         filtered_df = filtered_df.head(100)
@@ -154,6 +158,7 @@ if not search and not only_missing and len(filtered_df) > 100:
     st.caption("Showing a limited list for speed. Use search or the missing-cover filter to narrow the list.")
 
 filtered_df = filtered_df.copy()
+filtered_df["BookID"] = filtered_df["BookID"].astype(int)
 
 filtered_df["DisplayLabel"] = filtered_df.apply(
     lambda row: (
@@ -164,22 +169,21 @@ filtered_df["DisplayLabel"] = filtered_df.apply(
     axis=1
 )
 
-book_ids = filtered_df["BookID"].astype(int).tolist()
+book_ids = filtered_df["BookID"].tolist()
 display_map = dict(zip(book_ids, filtered_df["DisplayLabel"]))
 
 if not book_ids:
     st.warning("No books are available to select.")
     st.stop()
 
-# Separate widget state from cross-page navigation state
-default_cover_book_id = incoming_cover_book_id if incoming_cover_book_id in book_ids else book_ids[0]
+default_cover_book_id = preferred_book_id if preferred_book_id in book_ids else book_ids[0]
 
-if "manage_covers_selected_book_id" not in st.session_state:
+# Only initialize/reset BEFORE the widget is instantiated
+if (
+    "manage_covers_selected_book_id" not in st.session_state
+    or st.session_state["manage_covers_selected_book_id"] not in book_ids
+):
     st.session_state["manage_covers_selected_book_id"] = default_cover_book_id
-elif st.session_state["manage_covers_selected_book_id"] not in book_ids:
-    st.session_state["manage_covers_selected_book_id"] = default_cover_book_id
-elif incoming_cover_book_id in book_ids:
-    st.session_state["manage_covers_selected_book_id"] = incoming_cover_book_id
 
 selected_book_id = st.selectbox(
     "Choose a book",

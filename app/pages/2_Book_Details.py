@@ -4,11 +4,21 @@ from db import run_query, load_cover_image_bytes, execute_procedure
 
 st.title("📖 Book Details")
 
+query_params = st.query_params
+query_book_id = query_params.get("book_id")
+
+if query_book_id:
+    st.session_state["selected_book_id"] = int(query_book_id)
+
 STATUS_OPTIONS = ["Unread", "TBR", "Reading", "Read", "DNF"]
 RATING_ALLOWED_STATUSES = {"Read", "DNF"}
 
+
+# =========================================================
+# Cached loaders
+# =========================================================
 @st.cache_data(show_spinner=False)
-def load_book_detail(book_id, cache_buster=0):
+def load_book_detail(book_id: int, cache_buster: int = 0):
     book_query = """
     SELECT
         vd.BookID,
@@ -74,12 +84,12 @@ def load_book_detail(book_id, cache_buster=0):
 
 @st.cache_data(show_spinner=False)
 def load_all_titles():
-    df = run_query("""
+    return run_query("""
         SELECT BookID, Title
         FROM books
         ORDER BY Title;
     """)
-    return df
+
 
 @st.cache_data(show_spinner=False)
 def load_readers():
@@ -90,8 +100,31 @@ def load_readers():
     """)
     return df["ReaderName"].tolist()
 
+
 @st.cache_data(show_spinner=False)
-def get_current_reader_book_status(book_id: int, reader_name: str) -> tuple[str, float | None]:
+def load_reader_status_lookup(book_id: int, cache_buster: int = 0):
+    df = run_query("""
+        SELECT
+            r.ReaderName,
+            rs.ReadingStatus
+        FROM reading_status rs
+        JOIN readers r
+            ON rs.ReaderID = r.ReaderID
+        WHERE rs.BookID = ?
+    """, params=[book_id])
+
+    return {
+        row["ReaderName"]: row["ReadingStatus"]
+        for _, row in df.iterrows()
+    }
+
+
+@st.cache_data(show_spinner=False)
+def get_current_reader_book_status(
+    book_id: int,
+    reader_name: str,
+    cache_buster: int = 0,
+) -> tuple[str, float | None]:
     df = run_query(
         """
         SELECT TOP 1
@@ -118,9 +151,10 @@ def get_current_reader_book_status(book_id: int, reader_name: str) -> tuple[str,
 
     return current_status, current_rating
 
+
 @st.cache_data(show_spinner=False)
-def load_book_for_edit(book_id: int):
-    df = run_query("""
+def load_book_for_edit(book_id: int, cache_buster: int = 0):
+    return run_query("""
         SELECT
             BookID,
             Title,
@@ -136,9 +170,30 @@ def load_book_for_edit(book_id: int):
         WHERE BookID = ?;
     """, params=[book_id])
 
-    return df
+
+# =========================================================
+# Cache clearing
+# =========================================================
+def clear_book_details_caches():
+    load_book_detail.clear()
+    load_all_titles.clear()
+    load_readers.clear()
+    load_reader_status_lookup.clear()
+    get_current_reader_book_status.clear()
+    load_book_for_edit.clear()
+    load_cover_image_bytes.clear()
+
+    st.session_state["book_details_cache_buster"] = (
+        st.session_state.get("book_details_cache_buster", 0) + 1
+    )
+    st.session_state["library_cache_buster"] = (
+        st.session_state.get("library_cache_buster", 0) + 1
+    )
 
 
+# =========================================================
+# Helpers
+# =========================================================
 def clean_status_text(value):
     if pd.isna(value):
         return value
@@ -149,13 +204,30 @@ def clean_status_text(value):
         "📖 ": "",
         "⭐ ": "",
         "📘 ": "",
-        "❌ ": ""
+        "❌ ": "",
     }
 
     for old, new in replacements.items():
         value = value.replace(old, new)
 
     return value
+
+
+def add_to_tbr(book_id: int, reader_name: str, title: str):
+    try:
+        execute_procedure(
+            "SetReadingStatus",
+            [
+                int(book_id),
+                reader_name,
+                "TBR",
+            ],
+        )
+        clear_book_details_caches()
+        st.success(f"Added **{title}** to **{reader_name}’s** TBR.")
+        st.rerun()
+    except Exception as e:
+        st.error(f"Could not add to TBR. Error: {e}")
 
 
 def render_status_chip(reader_name, status):
@@ -166,7 +238,7 @@ def render_status_chip(reader_name, status):
         "Reading": "#3b82f6",
         "TBR": "#f59e0b",
         "Unread": "#6b7280",
-        "DNF": "#ef4444"
+        "DNF": "#ef4444",
     }
 
     color = color_map.get(clean_status, "#6b7280")
@@ -188,7 +260,7 @@ def render_status_chip(reader_name, status):
             {reader_name}: {clean_status}
         </span>
         """,
-        unsafe_allow_html=True
+        unsafe_allow_html=True,
     )
 
 
@@ -206,6 +278,9 @@ def render_meta_row(label, value, icon=None):
     st.markdown(f"**{prefix}{label}:** {value}")
 
 
+# =========================================================
+# Book selection
+# =========================================================
 book_id = st.session_state.get("selected_book_id")
 
 if not book_id:
@@ -215,7 +290,7 @@ if not book_id:
     if not all_titles.empty:
         selected_title = st.selectbox(
             "Jump to a book",
-            all_titles["Title"].tolist()
+            all_titles["Title"].tolist(),
         )
 
         if st.button("Open selected book", width='stretch'):
@@ -227,8 +302,14 @@ if not book_id:
         st.switch_page("pages/1_Library.py")
     st.stop()
 
-cache_buster = st.session_state.get("library_cache_buster", 0)
+
+# =========================================================
+# Load page data
+# =========================================================
+cache_buster = st.session_state.get("book_details_cache_buster", 0)
+
 book_df, reader_df = load_book_detail(book_id, cache_buster=cache_buster)
+reader_status_lookup = load_reader_status_lookup(book_id, cache_buster=cache_buster)
 
 if book_df.empty:
     st.error("Book not found.")
@@ -237,10 +318,15 @@ if book_df.empty:
     st.stop()
 
 book = book_df.iloc[0]
+title = book["Title"]
 
 main_genres = split_genres(book.get("MainGenres"))
 secondary_genres = split_genres(book.get("SecondaryGenres"))
 
+
+# =========================================================
+# Header
+# =========================================================
 header_left, header_right = st.columns([1, 2])
 
 with header_left:
@@ -259,9 +345,29 @@ with header_left:
     if st.button("⬅ Back to Library", width='stretch'):
         st.switch_page("pages/1_Library.py")
 
-    if st.button("🖼️ Manage covers", width='stretch'):
-        st.session_state["selected_cover_book_id"] = int(book["BookID"])
+    if st.button("🖼️ Manage Covers", width='stretch'):
+        st.session_state["navigate_to_cover_book_id"] = int(book_id)
         st.switch_page("pages/6_Manage_Covers.py")
+
+    button_col1, button_col2 = st.columns(2)
+
+    with button_col1:
+        angela_status = reader_status_lookup.get("Angela")
+
+        if angela_status == "TBR":
+            st.button("✔ Angela TBR", disabled=True, width='stretch')
+        else:
+            if st.button("➕ Angela TBR", width='stretch'):
+                add_to_tbr(book_id, "Angela", title)
+
+    with button_col2:
+        tori_status = reader_status_lookup.get("Tori")
+
+        if tori_status == "TBR":
+            st.button("✔ Tori TBR", disabled=True, width='stretch')
+        else:
+            if st.button("➕ Tori TBR", width='stretch'):
+                add_to_tbr(book_id, "Tori", title)
 
 with header_right:
     with st.container(border=True):
@@ -307,6 +413,10 @@ with header_right:
 
 st.divider()
 
+
+# =========================================================
+# Tabs
+# =========================================================
 overview_tab, edit_tab, reading_tab, genres_tab = st.tabs(
     ["Overview", "Edit", "Reading", "Genres"]
 )
@@ -344,14 +454,13 @@ with edit_tab:
     st.markdown("### Edit Book Details")
     st.caption("Update core metadata for this book.")
 
-    edit_df = load_book_for_edit(int(book["BookID"]))
+    edit_df = load_book_for_edit(int(book["BookID"]), cache_buster=cache_buster)
 
     if edit_df.empty:
         st.error("Could not load book details for editing.")
     else:
         edit_book = edit_df.iloc[0]
 
-        # Current values
         current_title = str(edit_book["Title"])
         current_authors = "" if pd.isna(edit_book["Authors"]) else str(edit_book["Authors"])
         current_series = str(edit_book["SeriesName"])
@@ -362,7 +471,6 @@ with edit_tab:
         current_notes = "" if pd.isna(edit_book["Notes"]) else str(edit_book["Notes"])
         current_full_cast = bool(edit_book["Full_Cast"]) if pd.notna(edit_book["Full_Cast"]) else False
 
-        # Load series options
         series_options_df = run_query("""
             SELECT SeriesName
             FROM series
@@ -374,23 +482,23 @@ with edit_tab:
             series_options = [current_series] + series_options
 
         with st.form(f"edit_details_form_{book['BookID']}"):
-            title = st.text_input("Title", value=current_title)
+            new_title = st.text_input("Title", value=current_title)
 
             series_name = st.selectbox(
                 "Series",
                 options=series_options,
                 index=series_options.index(current_series),
-                help="Use Standalone for books not part of a series."
+                help="Use Standalone for books not part of a series.",
             )
 
             new_series_name = st.text_input(
                 "Or create a new series",
-                value=""
+                value="",
             )
 
             authors = st.text_input(
                 "Authors (comma-separated)",
-                value=current_authors
+                value=current_authors,
             )
 
             col1, col2 = st.columns(2)
@@ -398,13 +506,13 @@ with edit_tab:
             with col1:
                 book_number_text = st.text_input(
                     "Book Number",
-                    value=current_book_number
+                    value=current_book_number,
                 )
 
             with col2:
                 universe_order_text = st.text_input(
                     "Universe Reading Order",
-                    value=current_universe_order
+                    value=current_universe_order,
                 )
 
             col3, col4 = st.columns(2)
@@ -412,24 +520,24 @@ with edit_tab:
             with col3:
                 length_type = st.text_input(
                     "Length Type",
-                    value=current_length_type
+                    value=current_length_type,
                 )
 
             with col4:
                 demographic = st.text_input(
                     "Demographic",
-                    value=current_demographic
+                    value=current_demographic,
                 )
 
             full_cast = st.checkbox(
                 "Full Cast Audio",
-                value=current_full_cast
+                value=current_full_cast,
             )
 
             notes = st.text_area(
                 "Notes",
                 value=current_notes,
-                height=140
+                height=140,
             )
 
             submitted = st.form_submit_button("💾 Save Changes", width='stretch')
@@ -445,7 +553,7 @@ with edit_tab:
                     "UpdateBookCoreDetails",
                     [
                         int(book["BookID"]),
-                        title.strip(),
+                        new_title.strip(),
                         final_series_name.strip(),
                         book_number,
                         universe_order,
@@ -464,10 +572,7 @@ with edit_tab:
                     ],
                 )
 
-                # Clear caches so everything refreshes
-                load_book_detail.clear()
-                load_book_for_edit.clear()
-
+                clear_book_details_caches()
                 st.toast("Book details updated.", icon="✅")
                 st.rerun()
 
@@ -488,7 +593,8 @@ with reading_tab:
         for reader_name in readers:
             current_status, current_rating = get_current_reader_book_status(
                 int(book["BookID"]),
-                reader_name
+                reader_name,
+                cache_buster=cache_buster,
             )
 
             default_status_index = (
@@ -520,7 +626,7 @@ with reading_tab:
                         STATUS_OPTIONS,
                         index=default_status_index,
                         key=status_widget_key,
-                        help="Unread = not started, TBR = want to read later."
+                        help="Unread = not started, TBR = want to read later.",
                     )
 
                     if new_status in RATING_ALLOWED_STATUSES:
@@ -530,13 +636,13 @@ with reading_tab:
                             max_value=5.0,
                             value=default_rating,
                             step=0.1,
-                            key=rating_widget_key
+                            key=rating_widget_key,
                         )
 
                         save_rating = st.checkbox(
                             f"Save rating for {reader_name}",
                             value=default_save_rating,
-                            key=save_rating_widget_key
+                            key=save_rating_widget_key,
                         )
                     else:
                         new_rating = None
@@ -545,7 +651,7 @@ with reading_tab:
 
                     submitted = st.form_submit_button(
                         f"💾 Save {reader_name}'s Status",
-                        width='stretch'
+                        width='stretch',
                     )
 
                 if submitted:
@@ -569,8 +675,7 @@ with reading_tab:
                                 ],
                             )
 
-                        load_book_detail.clear()
-                        get_current_reader_book_status.clear()
+                        clear_book_details_caches()
 
                         success_message = (
                             f"Updated **{book['Title']}** for **{reader_name}** "
@@ -597,12 +702,12 @@ with genres_tab:
         with st.form(f"genres_form_{book_id}"):
             main_genres_input = st.text_input(
                 "Main Genres (comma-separated)",
-                value=current_main_value
+                value=current_main_value,
             )
 
             secondary_genres_input = st.text_input(
                 "Secondary Genres (comma-separated)",
-                value=current_secondary_value
+                value=current_secondary_value,
             )
 
             save_genres = st.form_submit_button("💾 Save Genre Update", width='stretch')
@@ -618,12 +723,13 @@ with genres_tab:
                     ],
                 )
 
-                load_book_detail.clear()
+                clear_book_details_caches()
                 st.toast("Genres updated.", icon="✅")
                 st.rerun()
 
             except Exception as e:
                 st.error(f"Error: {e}")
+
 
 st.divider()
 
@@ -635,5 +741,5 @@ with nav_col1:
 
 with nav_col2:
     if st.button("🔄 Refresh page", width='stretch'):
-        load_book_detail.clear()
+        clear_book_details_caches()
         st.rerun()
