@@ -272,6 +272,14 @@ with tab3:
             "Books by demographic",
             "Books by length type",
             "Books per series",
+            "Total owned audiobook hours",
+            "Average audiobook length",
+            "Longest audiobooks",
+            "Shortest audiobooks",
+            "Narrator frequency rankings",
+            "Average series length",
+            "Full-cast vs narrator ratios",
+            "Yearly audiobook publication trends",
         ],
         key="insight_report_option"
     )
@@ -345,3 +353,164 @@ with tab3:
             GROUP BY s.SeriesName
             ORDER BY NumBooks DESC, s.SeriesName;
         """)
+
+    elif insight_option == "Total owned audiobook hours":
+        show_dataframe("""
+            SELECT
+                FORMAT(SUM(DurationMinutes), 'N0') AS [Total Minutes],
+
+                FORMAT(
+                    SUM(DurationMinutes) / 60.0,
+                    'N2'
+                ) AS [Total Hours],
+
+                FORMAT(
+                    SUM(DurationMinutes) / 60.0 / 24.0,
+                    'N2'
+                ) AS [Total Days],
+
+                FORMAT(
+                    SUM(DurationMinutes) / 60.0 / 24.0 / 365.25,
+                    'N2'
+                ) AS [Total Years]
+
+            FROM audiobook_versions
+            WHERE DurationMinutes IS NOT NULL;
+        """)
+
+    elif insight_option == "Average audiobook length":
+        show_dataframe("""
+            SELECT
+                COUNT(*) AS AudiobookVersionsWithDuration,
+                CAST(AVG(DurationMinutes) AS DECIMAL(10,2)) AS AverageMinutes,
+                CAST(AVG(DurationMinutes) / 60.0 AS DECIMAL(10,2)) AS AverageHours
+            FROM audiobook_versions
+            WHERE DurationMinutes IS NOT NULL;
+        """)
+
+    elif insight_option == "Longest audiobooks":
+        show_dataframe("""
+            SELECT TOP 25
+                Title,
+                Narrators,
+                Publisher,
+                ReleaseYear,
+                DurationMinutes,
+                DurationDisplay
+            FROM vw_audiobook_version_details
+            WHERE DurationMinutes IS NOT NULL
+            ORDER BY DurationMinutes DESC;
+        """)
+
+    elif insight_option == "Shortest audiobooks":
+        show_dataframe("""
+            SELECT TOP 25
+                Title,
+                Narrators,
+                Publisher,
+                ReleaseYear,
+                DurationMinutes,
+                DurationDisplay
+            FROM vw_audiobook_version_details
+            WHERE DurationMinutes IS NOT NULL
+            ORDER BY DurationMinutes ASC;
+        """)
+
+    elif insight_option == "Narrator frequency rankings":
+        df = run_query("""
+            SELECT TOP 25
+                n.NarratorName,
+                COUNT(DISTINCT avn.AudiobookVersionID) AS AudiobookVersionCount,
+                COUNT(DISTINCT av.BookID) AS BookCount,
+                CAST(SUM(av.DurationMinutes) / 60.0 AS DECIMAL(10,2)) AS TotalNarratedHours
+            FROM narrators n
+            JOIN audiobook_version_narrators avn
+                ON avn.NarratorID = n.NarratorID
+            JOIN audiobook_versions av
+                ON av.AudiobookVersionID = avn.AudiobookVersionID
+            GROUP BY n.NarratorName
+            ORDER BY AudiobookVersionCount DESC, n.NarratorName;
+        """)
+
+        show_bar_chart(df, "NarratorName", "AudiobookVersionCount", "Top Narrators")
+        st.dataframe(df, width="stretch", hide_index=True)
+
+    elif insight_option == "Average series length":
+        show_dataframe("""
+            WITH SeriesCounts AS (
+                SELECT
+                    s.SeriesID,
+                    s.SeriesName,
+                    COUNT(b.BookID) AS BookCount
+                FROM series s
+                JOIN books b
+                    ON b.SeriesID = s.SeriesID
+                WHERE s.SeriesName <> 'Standalone'
+                GROUP BY s.SeriesID, s.SeriesName
+            )
+            SELECT
+                COUNT(*) AS SeriesCount,
+                CAST(AVG(BookCount * 1.0) AS DECIMAL(10,2)) AS AverageBooksPerSeries,
+                MIN(BookCount) AS ShortestSeriesLength,
+                MAX(BookCount) AS LongestSeriesLength
+            FROM SeriesCounts;
+        """)
+
+    elif insight_option == "Full-cast vs narrator ratios":
+        df = run_query("""
+            WITH VersionNarratorCounts AS (
+                SELECT
+                    av.AudiobookVersionID,
+                    av.IsFullCast,
+                    COUNT(avn.NarratorID) AS NarratorCount
+                FROM audiobook_versions av
+                LEFT JOIN audiobook_version_narrators avn
+                    ON avn.AudiobookVersionID = av.AudiobookVersionID
+                GROUP BY av.AudiobookVersionID, av.IsFullCast
+            )
+            SELECT
+                CASE
+                    WHEN IsFullCast = 1 THEN 'Full Cast'
+                    WHEN NarratorCount = 1 THEN 'Single Narrator'
+                    WHEN NarratorCount > 1 THEN 'Multiple Narrators'
+                    ELSE 'No Narrator Listed'
+                END AS NarrationType,
+                COUNT(*) AS VersionCount,
+                CAST(COUNT(*) * 100.0 / SUM(COUNT(*)) OVER () AS DECIMAL(5,2)) AS PercentOfCollection
+            FROM VersionNarratorCounts
+            GROUP BY
+                CASE
+                    WHEN IsFullCast = 1 THEN 'Full Cast'
+                    WHEN NarratorCount = 1 THEN 'Single Narrator'
+                    WHEN NarratorCount > 1 THEN 'Multiple Narrators'
+                    ELSE 'No Narrator Listed'
+                END
+            ORDER BY VersionCount DESC;
+        """)
+
+        show_bar_chart(df, "NarrationType", "VersionCount", "Narration Type Breakdown")
+        st.dataframe(df, width="stretch", hide_index=True)
+
+    elif insight_option == "Yearly audiobook publication trends":
+        df = run_query("""
+            SELECT
+                ReleaseYear,
+                COUNT(*) AS AudiobookVersionCount,
+                COUNT(DISTINCT BookID) AS UniqueBookCount,
+                CAST(SUM(DurationMinutes) / 60.0 AS DECIMAL(10,2)) AS TotalHours
+            FROM audiobook_versions
+            WHERE ReleaseYear IS NOT NULL
+            GROUP BY ReleaseYear
+            ORDER BY ReleaseYear;
+        """)
+
+        chart = alt.Chart(df).mark_line(point=True).encode(
+            x=alt.X("ReleaseYear:O", title="Release Year"),
+            y=alt.Y("AudiobookVersionCount:Q", title="Audiobook Versions"),
+            tooltip=["ReleaseYear", "AudiobookVersionCount", "UniqueBookCount", "TotalHours"]
+        ).properties(
+            title="Audiobook Releases by Year"
+        )
+
+        st.altair_chart(chart, width="stretch")
+        st.dataframe(df, width="stretch", hide_index=True)

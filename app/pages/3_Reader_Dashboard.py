@@ -306,8 +306,8 @@ def load_all_books_for_reader(reader_name: str):
             bd.Authors,
             bd.SeriesName,
             bd.BookNumber,
-            CAST(NULL AS VARCHAR(50)) AS ReadingStatus,
-            CAST(NULL AS DECIMAL(4,2)) AS Rating,
+            rb.ReadingStatus,
+            rb.Rating,
             CAST(NULL AS VARCHAR(MAX)) AS MainGenres,
             CAST(NULL AS VARCHAR(MAX)) AS SecondaryGenres,
             CASE
@@ -321,13 +321,16 @@ def load_all_books_for_reader(reader_name: str):
                 ELSE 0
             END AS IsOnTBR
         FROM vw_book_details bd
+        LEFT JOIN vw_reader_books rb
+            ON rb.BookID = bd.BookID
+            AND rb.ReaderName = ?
         ORDER BY
             bd.Authors,
             bd.SeriesName,
             bd.BookNumber,
             bd.Title;
         """,
-        params=[reader_name],
+        params=[reader_name, reader_name],
     )
 
 # =========================================================
@@ -423,6 +426,40 @@ def update_reading_status(book_id: int, reader_name: str, new_status: str, title
     except Exception as e:
         st.error(f"Could not update reading status. Error: {e}")
 
+def finish_current_book_from_overview(
+    book_id: int,
+    reader_name: str,
+    new_status: str,
+    rating: float | None,
+    comment_text: str,
+    title: str,
+):
+    try:
+        execute_procedure(
+            "SetReadingStatus",
+            [int(book_id), reader_name, new_status]
+        )
+
+        if rating is not None:
+            execute_procedure(
+                "SetReaderRating",
+                [int(book_id), reader_name, float(rating)]
+            )
+
+        if comment_text and comment_text.strip():
+            add_reader_book_comment(
+                int(book_id),
+                reader_name,
+                comment_text,
+            )
+
+        clear_page_caches()
+        st.success(f"Updated **{title}** to **{new_status}**.")
+        st.rerun()
+
+    except Exception as e:
+        st.error(f"Could not update book. Error: {e}")
+
 
 def update_mini_status(book_id: int, reader_name: str, is_printed: int, is_crafted: int, title: str):
     try:
@@ -517,20 +554,36 @@ def render_book_card(
 
         if show_add_to_tbr_button:
             st.markdown("")
+
             if is_on_tbr:
                 st.button(
-                    "📝 Already on TBR",
+                    "📝 TBR",
                     key=f"all_books_tbr_disabled_{reader_name}_{book_id}",
-                    use_container_width=True,
+                    width='stretch',
                     disabled=True,
                 )
             else:
                 if st.button(
-                    "➕ Add to TBR",
+                    "➕ TBR",
                     key=f"all_books_tbr_{reader_name}_{book_id}",
-                    use_container_width=True,
+                    width='stretch',
                 ):
                     update_reading_status(book_id, reader_name, "TBR", title)
+
+            if reading_status == "Reading":
+                st.button(
+                    "▶️",
+                    key=f"all_books_reading_disabled_{reader_name}_{book_id}",
+                    width='stretch',
+                    disabled=True,
+                )
+            else:
+                if st.button(
+                    "▶️",
+                    key=f"all_books_mark_reading_{reader_name}_{book_id}",
+                    width='stretch',
+                ):
+                    update_reading_status(book_id, reader_name, "Reading", title)
 
         if show_status_actions and reading_status:
             st.markdown("")
@@ -540,17 +593,17 @@ def render_book_card(
 
                 with col1:
                     if st.button(
-                        "▶️ Mark Reading",
+                        "▶️",
                         key=f"reading_{reader_name}_{book_id}",
-                        use_container_width=True,
+                        width='stretch',
                     ):
                         update_reading_status(book_id, reader_name, "Reading", title)
 
                 with col2:
                     if st.button(
-                        "➖ Remove TBR",
+                        "➖ TBR",
                         key=f"remove_tbr_{reader_name}_{book_id}",
-                        use_container_width=True,
+                        width='stretch',
                     ):
                         update_reading_status(book_id, reader_name, "Unread", title)
 
@@ -558,14 +611,14 @@ def render_book_card(
                 col1, col2 = st.columns(2)
                 with col1:
                     if st.button(
-                        "✅ Mark Read",
+                        "✅",
                         key=f"read_{reader_name}_{book_id}",
                         width='stretch',
                     ):
                         update_reading_status(book_id, reader_name, "Read", title)
                 with col2:
                     if st.button(
-                        "⛔ Mark DNF",
+                        "⛔",
                         key=f"dnf_{reader_name}_{book_id}",
                         width='stretch',
                     ):
@@ -576,25 +629,25 @@ def render_book_card(
 
                 with col1:
                     if st.button(
-                        "↩️ Move to TBR",
+                        "↩️ TBR",
                         key=f"tbr_{reader_name}_{book_id}",
-                        use_container_width=True,
+                        width='stretch',
                     ):
                         update_reading_status(book_id, reader_name, "TBR", title)
 
                 with col2:
                     if current_favorite_book_id == book_id:
                         st.button(
-                            "⭐ Favorite",
+                            "⭐",
                             key=f"favorite_current_{reader_name}_{book_id}",
-                            use_container_width=True,
+                            width='stretch',
                             disabled=True,
                         )
                     else:
                         if st.button(
-                            "⭐ Mark Favorite",
+                            "⭐",
                             key=f"favorite_{reader_name}_{book_id}",
-                            use_container_width=True,
+                            width='stretch',
                         ):
                             set_favorite_book(book_id, reader_name, title)
 
@@ -602,14 +655,14 @@ def render_book_card(
                 col1, col2 = st.columns(2)
                 with col1:
                     if st.button(
-                        "↩️ Move to TBR",
+                        "↩️ TBR",
                         key=f"dnf_tbr_{reader_name}_{book_id}",
                         width='stretch',
                     ):
                         update_reading_status(book_id, reader_name, "TBR", title)
                 with col2:
                     if st.button(
-                        "▶️ Resume",
+                        "▶️",
                         key=f"resume_{reader_name}_{book_id}",
                         width='stretch',
                     ):
@@ -624,6 +677,9 @@ def render_overview_book_card(
     note=None,
     cover_bytes=None,
     status_label=None,
+    book_id: int | None = None,
+    reader_name: str | None = None,
+    show_mark_read_action: bool = False,
 ):
     with st.container():
         if cover_bytes:
@@ -671,10 +727,64 @@ def render_overview_book_card(
         if note and str(note).strip():
             st.info(str(note).strip())
 
+        if show_mark_read_action and book_id is not None and reader_name is not None:
+            st.markdown("")
+
+            with st.form(f"finish_book_overview_form_{selected_reader}_{int(row['BookID'])}"):
+                new_rating = st.slider(
+                    "Rating",
+                    min_value=0.0,
+                    max_value=5.0,
+                    value=4.0,
+                    step=0.1,
+                    key=f"overview_rating_{selected_reader}_{int(row['BookID'])}",
+                )
+
+                comment_text = st.text_area(
+                    "Optional comment",
+                    placeholder="Add thoughts about this book...",
+                    height=100,
+                    key=f"overview_comment_{selected_reader}_{int(row['BookID'])}",
+                )
+
+                action_col1, action_col2 = st.columns(2)
+
+                with action_col1:
+                    submitted_read = st.form_submit_button(
+                        "✅",
+                        use_container_width=True,
+                    )
+
+                with action_col2:
+                    submitted_dnf = st.form_submit_button(
+                        "⛔",
+                        use_container_width=True,
+                    )
+
+            if submitted_read:
+                finish_current_book_from_overview(
+                    book_id=int(row["BookID"]),
+                    reader_name=selected_reader,
+                    new_status="Read",
+                    rating=new_rating,
+                    comment_text=comment_text,
+                    title=row["Title"],
+                )
+
+            if submitted_dnf:
+                finish_current_book_from_overview(
+                    book_id=int(row["BookID"]),
+                    reader_name=selected_reader,
+                    new_status="DNF",
+                    rating=new_rating,
+                    comment_text=comment_text,
+                    title=row["Title"],
+                )
+
 def render_books_grid(
     df: pd.DataFrame,
     reader_name: str,
-    cards_per_row: int = 7,
+    cards_per_row: int = 5,
     show_status_actions: bool = True,
     current_favorite_book_id: int | None = None,
     show_add_to_tbr_button: bool = False,
@@ -764,7 +874,7 @@ def render_book_browser(
         render_books_grid(
             working_df,
             reader_name,
-            cards_per_row=7,
+            cards_per_row=5,
             show_status_actions=show_status_actions,
             current_favorite_book_id=current_favorite_book_id,
             show_add_to_tbr_button=show_add_to_tbr_button,
@@ -791,6 +901,21 @@ def render_book_browser(
             width='stretch',
             hide_index=True,
         )
+
+def add_reader_book_comment(book_id: int, reader_name: str, comment_text: str):
+    comment_text = comment_text.strip()
+
+    if not comment_text:
+        return
+
+    execute_procedure(
+        "AddReaderBookComment",
+        [
+            int(book_id),
+            reader_name,
+            comment_text,
+        ],
+    )
 
 
 # =========================================================
@@ -840,59 +965,138 @@ st.divider()
 # =========================================================
 # Overview row
 # =========================================================
-overview_col1, overview_col2 = st.columns([1, 1.35], gap="large")
+overview_col1, overview_col2 = st.columns(2, gap="large")
 
 with overview_col1:
-    st.subheader("Currently Reading")
+    with st.container(border=True):
+        st.subheader("📖 Currently Reading")
 
-    currently_reading_df = books_df[
-        books_df["ReadingStatus"] == "Reading"
-    ].copy()
+        currently_reading_df = books_df[
+            books_df["ReadingStatus"] == "Reading"
+        ].copy()
 
-    if currently_reading_df.empty:
-        st.caption("Nothing is currently marked as Reading.")
-    else:
-        currently_reading_df = currently_reading_df.sort_values(
-            by=["Authors", "SeriesName", "BookNumber", "Title"],
-            na_position="last"
-        )
+        if currently_reading_df.empty:
+            st.caption("Nothing is currently marked as Reading.")
+        else:
+            currently_reading_df = currently_reading_df.sort_values(
+                by=["Authors", "SeriesName", "BookNumber", "Title"],
+                na_position="last"
+            )
 
-        preview_df = currently_reading_df.head(3)
-        reading_cols = st.columns(len(preview_df))
+            row = currently_reading_df.iloc[0]
+            cover_bytes = load_primary_cover_bytes(int(row["BookID"]))
 
-        for col, (_, row) in zip(reading_cols, preview_df.iterrows()):
-            with col:
-                cover_bytes = load_primary_cover_bytes(int(row["BookID"]))
+            card_col1, card_col2 = st.columns([1, 1.7], gap="medium")
 
-                render_overview_book_card(
-                    title=row["Title"],
-                    authors=row["Authors"],
-                    series_name=row["SeriesName"],
-                    book_number=row["BookNumber"],
-                    rating=row["Rating"],
-                    cover_bytes=cover_bytes,
-                    status_label="Reading",
-                )
+            with card_col1:
+                if cover_bytes:
+                    st.image(cover_bytes, width=210)
+                else:
+                    st.caption("No cover available")
+
+            with card_col2:
+                st.markdown(f"### {row['Title']}")
+                formatted_number = format_book_number(row["BookNumber"])
+
+                series_part = None
+                if pd.notna(row["SeriesName"]) and row["SeriesName"]:
+                    if formatted_number:
+                        series_part = f"{row['SeriesName']} #{formatted_number}"
+                    else:
+                        series_part = row["SeriesName"]
+
+                if series_part:
+                    st.caption(f"{row['Authors']} • {series_part}")
+                else:
+                    st.caption(row["Authors"])
+
+                with st.form(f"finish_book_overview_form_{selected_reader}_{int(row['BookID'])}"):
+                    new_rating = st.slider(
+                        "Rating",
+                        min_value=0.0,
+                        max_value=5.0,
+                        value=4.0,
+                        step=0.1,
+                        key=f"overview_rating_{selected_reader}_{int(row['BookID'])}",
+                    )
+
+                    comment_text = st.text_area(
+                        "Optional comment",
+                        placeholder="Add thoughts about this book...",
+                        height=100,
+                        key=f"overview_comment_{selected_reader}_{int(row['BookID'])}",
+                    )
+
+                    action_col1, action_col2 = st.columns(2)
+
+                    with action_col1:
+                        submitted_read = st.form_submit_button(
+                            "✅",
+                            width='stretch',
+                        )
+
+                    with action_col2:
+                        submitted_dnf = st.form_submit_button(
+                            "⛔",
+                            width='stretch',
+                        )
+
+                if submitted_read:
+                    finish_current_book_from_overview(
+                        book_id=int(row["BookID"]),
+                        reader_name=selected_reader,
+                        new_status="Read",
+                        rating=new_rating,
+                        comment_text=comment_text,
+                        title=row["Title"],
+                    )
+
+                if submitted_dnf:
+                    finish_current_book_from_overview(
+                        book_id=int(row["BookID"]),
+                        reader_name=selected_reader,
+                        new_status="DNF",
+                        rating=new_rating,
+                        comment_text=comment_text,
+                        title=row["Title"],
+                    )
 
 with overview_col2:
-    st.subheader("Favorite Book")
+    with st.container(border=True):
+        st.subheader("⭐ Favorite Book")
 
-    if favorite_df.empty:
-        st.caption("No favorite book selected yet.")
-    else:
-        favorite = favorite_df.iloc[0]
-        favorite_cover = load_primary_cover_bytes(int(favorite["BookID"]))
+        if favorite_df.empty:
+            st.caption("No favorite book selected yet.")
+        else:
+            favorite = favorite_df.iloc[0]
+            favorite_cover = load_primary_cover_bytes(int(favorite["BookID"]))
 
-        render_overview_book_card(
-            title=favorite["Title"],
-            authors=favorite["Authors"],
-            series_name=favorite["SeriesName"],
-            book_number=favorite["BookNumber"],
-            rating=favorite["Rating"],
-            note=favorite["FavoriteNotes"],
-            cover_bytes=favorite_cover,
-            status_label=favorite["ReadingStatus"],
-        )
+            card_col1, card_col2 = st.columns([1, 1.7], gap="medium")
+
+            with card_col1:
+                if favorite_cover:
+                    st.image(favorite_cover, width=210)
+                else:
+                    st.caption("No cover available")
+
+            with card_col2:
+                st.markdown(f"### {favorite['Title']}")
+                st.caption(favorite["Authors"])
+
+                formatted_number = format_book_number(favorite["BookNumber"])
+                if pd.notna(favorite["SeriesName"]) and favorite["SeriesName"]:
+                    if formatted_number:
+                        st.caption(f"{favorite['SeriesName']} #{formatted_number}")
+                    else:
+                        st.caption(favorite["SeriesName"])
+
+                st.caption(f"Status: {favorite['ReadingStatus']}")
+
+                if pd.notna(favorite["Rating"]):
+                    st.caption(f"Rating: {favorite['Rating']}")
+
+                if pd.notna(favorite["FavoriteNotes"]) and str(favorite["FavoriteNotes"]).strip():
+                    st.info(str(favorite["FavoriteNotes"]).strip())
 
 
 
@@ -960,7 +1164,7 @@ with tab_tbr:
                     "Choose a book",
                     available_books_df["BookLabel"].tolist()
                 )
-                submitted = st.form_submit_button("Add to TBR", use_container_width=True)
+                submitted = st.form_submit_button("Add to TBR", width='stretch')
 
             if submitted:
                 selected_row = available_books_df[

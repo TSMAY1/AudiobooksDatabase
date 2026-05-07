@@ -54,6 +54,25 @@ def execute_procedure(proc_name, params):
         cursor.execute(sql, params)
         conn.commit()
 
+def execute_procedure_returning_id(proc_name, params, id_column="BookID"):
+    placeholders = ", ".join(["?"] * len(params))
+    sql = f"EXEC {proc_name} {placeholders}"
+
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute(sql, params)
+
+        row = cursor.fetchone()
+
+        if row is None:
+            conn.commit()
+            return None
+
+        returned_id = getattr(row, id_column, None)
+
+        conn.commit()
+        return int(returned_id) if returned_id is not None else None
+
 
 fitz.TOOLS.mupdf_display_warnings(False)
 
