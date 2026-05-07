@@ -19,6 +19,16 @@ def load_readers(cache_buster: int = 0):
 
 
 @st.cache_data(show_spinner=False)
+def load_narrators(cache_buster: int = 0):
+    df = run_query("""
+        SELECT NarratorName
+        FROM narrators
+        ORDER BY NarratorName;
+    """)
+    return df["NarratorName"].tolist()
+
+
+@st.cache_data(show_spinner=False)
 def load_library_data(cache_buster: int = 0):
     books_query = """
     SELECT
@@ -38,12 +48,23 @@ def load_library_data(cache_buster: int = 0):
             ', '
         ) AS SecondaryGenres,
         vd.Full_Cast,
+        ab.Narrators,
+        ab.DurationMinutes,
         pc.ImageFilePath AS CoverImagePath
     FROM vw_book_details vd
     LEFT JOIN book_genres bg
         ON bg.BookID = vd.BookID
     LEFT JOIN genres g
         ON g.GenreID = bg.GenreID
+    LEFT JOIN (
+        SELECT
+            BookID,
+            STRING_AGG(Narrators, ', ') AS Narrators,
+            MAX(DurationMinutes) AS DurationMinutes
+        FROM vw_book_audiobooks
+        GROUP BY BookID
+    ) ab
+        ON ab.BookID = vd.BookID
     LEFT JOIN vw_book_primary_cover pc
         ON pc.BookID = vd.BookID
     GROUP BY
@@ -55,6 +76,8 @@ def load_library_data(cache_buster: int = 0):
         vd.BookNumber,
         vd.UniverseReadingOrder,
         vd.Full_Cast,
+        ab.Narrators,
+        ab.DurationMinutes,
         pc.ImageFilePath
     """
 
@@ -76,11 +99,12 @@ def load_library_data(cache_buster: int = 0):
 def build_df(cache_buster: int = 0):
     books_df, reader_df = load_library_data(cache_buster=cache_buster)
     reader_names = load_readers(cache_buster=cache_buster)
+    narrator_names = load_narrators(cache_buster=cache_buster)
 
     if reader_df.empty:
         df = books_df.copy()
         df["SortOrder"] = df["UniverseReadingOrder"].fillna(df["BookNumber"])
-        return df, reader_names
+        return df, reader_names, narrator_names
 
     status = reader_df.pivot(index="BookID", columns="ReaderName", values="ReadingStatus")
     rating = reader_df.pivot(index="BookID", columns="ReaderName", values="Rating")
@@ -93,7 +117,7 @@ def build_df(cache_buster: int = 0):
 
     df["SortOrder"] = df["UniverseReadingOrder"].fillna(df["BookNumber"])
 
-    return df, reader_names
+    return df, reader_names, narrator_names
 
 
 # =========================================================
@@ -101,6 +125,7 @@ def build_df(cache_buster: int = 0):
 # =========================================================
 def clear_library_caches():
     load_readers.clear()
+    load_narrators.clear()
     load_library_data.clear()
     build_df.clear()
     load_cover_image_bytes.clear()
@@ -126,10 +151,23 @@ def format_book_number(num):
         return str(num)
 
 
+def format_duration(minutes):
+    if pd.isna(minutes):
+        return ""
+
+    try:
+        minutes = int(minutes)
+        hours = minutes // 60
+        mins = minutes % 60
+        return f"{hours}h {mins:02d}m"
+    except Exception:
+        return ""
+
+
 def format_series(series, num):
     if pd.notna(series):
         formatted_num = format_book_number(num)
-        return f"{series} • Book {formatted_num}" if formatted_num else str(series)
+        return f"{series} #{formatted_num}" if formatted_num else str(series)
     return "Standalone"
 
 
@@ -170,11 +208,11 @@ def render_status(reader, status):
     )
 
 
-def render_card(row, reader_cols):
+def render_card(row):
     with st.container(border=True):
         if row.get("CoverImagePath"):
             try:
-                st.image(load_cover_image_bytes(row["CoverImagePath"]), width='stretch')
+                st.image(load_cover_image_bytes(row["CoverImagePath"]), width="stretch")
             except Exception:
                 st.caption("No cover")
         else:
@@ -199,12 +237,8 @@ def render_card(row, reader_cols):
             unsafe_allow_html=True,
         )
 
-        for col in reader_cols:
-            if col.endswith("Status"):
-                val = clean(row.get(col))
-                if val:
-                    reader = col.replace(" Status", "")
-                    render_status(reader, val)
+        if pd.notna(row.get("DurationMinutes")):
+            st.caption(f"⏱️ {format_duration(row['DurationMinutes'])}")
 
         book_id = int(row["BookID"])
         details_url = f"/Book_Details?book_id={book_id}"
@@ -221,9 +255,9 @@ def render_card(row, reader_cols):
     text-align:center;
     font-size:0.85rem;
     line-height:1.2;
-    margin:0.25rem;
+    margin:0.75rem 0 0.5rem 0;;
 ">
-Open details ↗
+Open details
 </div>
 </a>
 """.strip()
@@ -235,7 +269,7 @@ Open details ↗
 # Load page data
 # =========================================================
 cache_buster = st.session_state.get("library_cache_buster", 0)
-df, readers = build_df(cache_buster=cache_buster)
+df, readers, narrators = build_df(cache_buster=cache_buster)
 
 
 # =========================================================
@@ -243,27 +277,52 @@ df, readers = build_df(cache_buster=cache_buster)
 # =========================================================
 search = st.text_input("Search")
 
-col1, col2 = st.columns([1, 1])
+col1, col2, col3 = st.columns([1, 1, 1])
 
 with col1:
-    sort = st.selectbox("Sort by", ["Title", "Author", "Series", "Universe"], index=2)
+    sort = st.selectbox(
+        "Sort by",
+        [
+            "Title",
+            "Author",
+            "Series",
+            "Universe",
+            "Audiobook Length: Shortest First",
+            "Audiobook Length: Longest First",
+        ],
+        index=2,
+    )
 
 with col2:
     view = st.selectbox("View", ["Cards", "Table"], index=0)
 
-if st.button("🔄 Refresh Library", width='stretch'):
+with col3:
+    selected_narrator = st.selectbox(
+        "Narrator",
+        ["All narrators"] + narrators,
+    )
+
+if st.button("🔄 Refresh Library", width="stretch"):
     clear_library_caches()
     st.rerun()
 
 
 # =========================================================
-# Search
+# Search and filters
 # =========================================================
 if search:
     df = df[
         df["Title"].str.contains(search, case=False, na=False)
         | df["Authors"].str.contains(search, case=False, na=False)
         | df["SeriesName"].fillna("").str.contains(search, case=False, na=False)
+        | df["Narrators"].fillna("").str.contains(search, case=False, na=False)
+    ]
+
+if selected_narrator != "All narrators":
+    df = df[
+        df["Narrators"]
+        .fillna("")
+        .str.contains(selected_narrator, case=False, regex=False)
     ]
 
 
@@ -278,6 +337,14 @@ elif sort == "Title":
     df = df.sort_values(["Title"], na_position="last")
 elif sort == "Universe":
     df = df.sort_values(["UniverseName", "SortOrder"], na_position="last")
+elif sort == "Audiobook Length: Shortest First":
+    df = df.sort_values(["DurationMinutes", "Title"], na_position="last")
+elif sort == "Audiobook Length: Longest First":
+    df = df.sort_values(
+        ["DurationMinutes", "Title"],
+        ascending=[False, True],
+        na_position="last",
+    )
 
 
 # =========================================================
@@ -298,12 +365,18 @@ st.caption(f"{len(df)} books")
 # =========================================================
 if view == "Table":
     display_df = df.copy()
+
     if "BookNumber" in display_df.columns:
         display_df["BookNumber"] = display_df["BookNumber"].apply(format_book_number)
+
     if "UniverseReadingOrder" in display_df.columns:
         display_df["UniverseReadingOrder"] = display_df["UniverseReadingOrder"].apply(format_book_number)
 
-    st.dataframe(display_df, width='stretch', hide_index=True)
+    if "DurationMinutes" in display_df.columns:
+        display_df["Duration"] = display_df["DurationMinutes"].apply(format_duration)
+        display_df = display_df.drop(columns=["DurationMinutes"], errors="ignore")
+
+    st.dataframe(display_df, width="stretch", hide_index=True)
 
 else:
     cards_per_row = 7
@@ -314,4 +387,4 @@ else:
 
         for col, (_, row) in zip(cols, chunk.iterrows()):
             with col:
-                render_card(row, reader_cols)
+                render_card(row)

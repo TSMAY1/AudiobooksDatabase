@@ -125,6 +125,45 @@ ON reading_status (ReadingStatus, BookID)
 INCLUDE (ReaderID, Rating);
 GO
 
+CREATE TABLE reader_book_comments (
+    CommentID INT IDENTITY(1,1) PRIMARY KEY,
+    ReaderID INT NOT NULL,
+    BookID INT NOT NULL,
+    CommentText NVARCHAR(MAX) NOT NULL,
+    DateAdded DATETIME2 NOT NULL
+        CONSTRAINT DF_reader_book_comments_DateAdded DEFAULT SYSDATETIME(),
+
+    FOREIGN KEY (ReaderID) REFERENCES readers(ReaderID),
+    FOREIGN KEY (BookID) REFERENCES books(BookID)
+);
+GO
+
+CREATE INDEX IX_reader_book_comments_BookID_DateAdded
+ON reader_book_comments (BookID, DateAdded DESC);
+GO
+
+CREATE INDEX IX_reader_book_comments_ReaderID_BookID
+ON reader_book_comments (ReaderID, BookID);
+GO
+
+
+CREATE TABLE reader_favorite_books (
+    ReaderID INT NOT NULL,
+    BookID INT NOT NULL,
+    FavoriteNotes NVARCHAR(500) NULL,
+    DateSelected DATETIME2 NOT NULL
+        CONSTRAINT DF_reader_favorite_books_DateSelected DEFAULT SYSDATETIME(),
+
+    PRIMARY KEY (ReaderID),
+    FOREIGN KEY (ReaderID) REFERENCES readers(ReaderID),
+    FOREIGN KEY (BookID) REFERENCES books(BookID)
+);
+GO
+
+CREATE INDEX IX_reader_favorite_books_BookID
+ON reader_favorite_books (BookID);
+GO
+
 
 CREATE TABLE bookclub_calendars (
     CalendarID INT IDENTITY(1,1) PRIMARY KEY,
@@ -229,5 +268,57 @@ GO
 CREATE INDEX IX_book_covers_ImageHash
 ON book_covers (ImageHash)
 WHERE ImageHash IS NOT NULL;
+GO
+
+
+CREATE TABLE narrators (
+    NarratorID INT PRIMARY KEY IDENTITY(1,1),
+    NarratorName NVARCHAR(255) NOT NULL UNIQUE
+);
+GO
+
+CREATE TABLE audiobook_versions (
+    AudiobookVersionID INT PRIMARY KEY IDENTITY(1,1),
+    BookID INT NOT NULL,
+    EditionName NVARCHAR(255) NULL,
+    Publisher NVARCHAR(255) NULL,
+    ReleaseYear INT NULL,
+    DurationMinutes INT NULL,
+    IsAbridged BIT NOT NULL DEFAULT 0,
+    IsFullCast BIT NOT NULL DEFAULT 0,
+    Notes NVARCHAR(MAX) NULL,
+
+    FOREIGN KEY (BookID) REFERENCES books(BookID),
+    CONSTRAINT CK_audiobook_versions_ReleaseYear
+        CHECK (ReleaseYear IS NULL OR ReleaseYear >= 0),
+    CONSTRAINT CK_audiobook_versions_DurationMinutes
+        CHECK (DurationMinutes IS NULL OR DurationMinutes > 0)
+);
+GO
+
+CREATE TABLE audiobook_version_narrators (
+    AudiobookVersionID INT NOT NULL,
+    NarratorID INT NOT NULL,
+    NarratorRole NVARCHAR(100) NULL,
+    DisplayOrder INT NOT NULL DEFAULT 1,
+
+    PRIMARY KEY (AudiobookVersionID, NarratorID),
+    FOREIGN KEY (AudiobookVersionID) REFERENCES audiobook_versions(AudiobookVersionID),
+    FOREIGN KEY (NarratorID) REFERENCES narrators(NarratorID),
+    CONSTRAINT CK_audiobook_version_narrators_DisplayOrder
+        CHECK (DisplayOrder > 0)
+);
+GO
+
+CREATE INDEX IX_audiobook_versions_BookID
+ON audiobook_versions (BookID);
+GO
+
+CREATE INDEX IX_audiobook_version_narrators_NarratorID_AudiobookVersionID
+ON audiobook_version_narrators (NarratorID, AudiobookVersionID);
+GO
+
+CREATE INDEX IX_audiobook_version_narrators_AudiobookVersionID_DisplayOrder
+ON audiobook_version_narrators (AudiobookVersionID, DisplayOrder, NarratorID);
 GO
 

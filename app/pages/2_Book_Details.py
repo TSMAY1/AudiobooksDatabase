@@ -170,6 +170,40 @@ def load_book_for_edit(book_id: int, cache_buster: int = 0):
         WHERE BookID = ?;
     """, params=[book_id])
 
+@st.cache_data(show_spinner=False)
+def load_book_audiobooks(book_id: int, cache_buster: int = 0):
+    return run_query("""
+        SELECT
+            AudiobookVersionID,
+            EditionName,
+            Publisher,
+            ReleaseYear,
+            DurationMinutes,
+            DurationDisplay,
+            IsAbridged,
+            IsFullCast,
+            Notes,
+            Narrators
+        FROM vw_book_audiobooks
+        WHERE BookID = ?
+        ORDER BY
+            CASE WHEN IsFullCast = 1 THEN 1 ELSE 0 END,
+            ReleaseYear,
+            EditionName;
+    """, params=[book_id])
+
+@st.cache_data(show_spinner=False)
+def load_book_comments(book_id: int, cache_buster: int = 0):
+    return run_query("""
+        SELECT
+            CommentID,
+            ReaderName,
+            CommentText,
+            DateAdded
+        FROM vw_reader_book_comments
+        WHERE BookID = ?
+        ORDER BY DateAdded DESC, CommentID DESC;
+    """, params=[book_id])
 
 # =========================================================
 # Cache clearing
@@ -182,6 +216,8 @@ def clear_book_details_caches():
     get_current_reader_book_status.clear()
     load_book_for_edit.clear()
     load_cover_image_bytes.clear()
+    load_book_audiobooks.clear()
+    load_book_comments.clear()
 
     st.session_state["book_details_cache_buster"] = (
         st.session_state.get("book_details_cache_buster", 0) + 1
@@ -229,6 +265,33 @@ def add_to_tbr(book_id: int, reader_name: str, title: str):
     except Exception as e:
         st.error(f"Could not add to TBR. Error: {e}")
 
+def add_reader_book_comment(book_id: int, reader_name: str, comment_text: str):
+    try:
+        execute_procedure(
+            "AddReaderBookComment",
+            [
+                int(book_id),
+                reader_name,
+                comment_text.strip(),
+            ],
+        )
+        clear_book_details_caches()
+        st.success("Comment added.")
+        st.rerun()
+    except Exception as e:
+        st.error(f"Could not add comment. Error: {e}")
+
+def delete_reader_book_comment(comment_id: int):
+    try:
+        execute_procedure(
+            "DeleteReaderBookComment",
+            [int(comment_id)],
+        )
+        clear_book_details_caches()
+        st.success("Comment deleted.")
+        st.rerun()
+    except Exception as e:
+        st.error(f"Could not delete comment. Error: {e}")
 
 def render_status_chip(reader_name, status):
     clean_status = clean_status_text(status)
@@ -310,6 +373,8 @@ cache_buster = st.session_state.get("book_details_cache_buster", 0)
 
 book_df, reader_df = load_book_detail(book_id, cache_buster=cache_buster)
 reader_status_lookup = load_reader_status_lookup(book_id, cache_buster=cache_buster)
+audiobooks_df = load_book_audiobooks(book_id, cache_buster=cache_buster)
+comments_df = load_book_comments(book_id, cache_buster=cache_buster)
 
 if book_df.empty:
     st.error("Book not found.")
@@ -449,6 +514,132 @@ with overview_tab:
                 st.write(book["Notes"])
             else:
                 st.caption("No notes recorded for this book.")
+    
+    st.markdown("")
+
+    with st.container(border=True):
+        st.markdown("### 💬 Reader Comments")
+
+        readers = load_readers()
+
+        with st.form(f"add_comment_form_{book['BookID']}"):
+            comment_reader = st.selectbox(
+                "Reader",
+                readers,
+                key=f"comment_reader_{book['BookID']}",
+            )
+
+            comment_text = st.text_area(
+                "Add a comment",
+                height=120,
+                placeholder="What did this reader think of the book?",
+                key=f"comment_text_{book['BookID']}",
+            )
+
+            submitted_comment = st.form_submit_button(
+                "💬 Add Comment",
+                width='stretch',
+            )
+
+        if submitted_comment:
+            add_reader_book_comment(
+                int(book["BookID"]),
+                comment_reader,
+                comment_text,
+            )
+
+        st.divider()
+
+        if comments_df.empty:
+            st.caption("No reader comments yet.")
+        else:
+            for _, row in comments_df.iterrows():
+                comment_id = int(row["CommentID"])
+
+                with st.container(border=True):
+                    st.markdown(f"**{row['ReaderName']}**")
+                    st.write(row["CommentText"])
+
+                    if pd.notna(row["DateAdded"]):
+                        formatted_date = row["DateAdded"].strftime("%b %d, %Y • %I:%M %p")
+                        st.caption(f"Added: {formatted_date}")
+
+                    st.markdown("")
+
+                    if st.button(
+                        "🗑️ Delete Comment",
+                        key=f"delete_comment_{comment_id}",
+                        use_container_width=True,
+                    ):
+                        delete_reader_book_comment(comment_id)
+
+    st.markdown("")
+
+    with st.container(border=True):
+        st.markdown("### 🎧 Audiobooks")
+
+        if audiobooks_df.empty:
+            st.caption("No audiobook versions added yet.")
+        else:
+            for _, row in audiobooks_df.iterrows():
+                edition_name = (
+                    row["EditionName"]
+                    if pd.notna(row.get("EditionName")) and str(row["EditionName"]).strip()
+                    else "Standard Audiobook"
+                )
+
+                narrators = (
+                    row["Narrators"]
+                    if pd.notna(row.get("Narrators")) and str(row["Narrators"]).strip()
+                    else "No narrators recorded"
+                )
+
+                duration = (
+                    row["DurationDisplay"]
+                    if pd.notna(row.get("DurationDisplay")) and str(row["DurationDisplay"]).strip()
+                    else "Unknown length"
+                )
+
+                publisher = (
+                    row["Publisher"]
+                    if pd.notna(row.get("Publisher")) and str(row["Publisher"]).strip()
+                    else None
+                )
+
+                release_year = (
+                    str(int(row["ReleaseYear"]))
+                    if pd.notna(row.get("ReleaseYear"))
+                    else None
+                )
+
+                notes = (
+                    row["Notes"]
+                    if pd.notna(row.get("Notes")) and str(row["Notes"]).strip()
+                    else None
+                )
+
+                tags = []
+                if row.get("IsFullCast") in [True, 1]:
+                    tags.append("Full Cast")
+                if row.get("IsAbridged") in [True, 1]:
+                    tags.append("Abridged")
+
+                with st.container(border=True):
+                    st.markdown(f"**{edition_name}**")
+                    st.markdown(f"**Narrator(s):** {narrators}")
+                    st.markdown(f"**Length:** {duration}")
+
+                    if publisher:
+                        st.markdown(f"**Publisher:** {publisher}")
+
+                    if release_year:
+                        st.markdown(f"**Release Year:** {release_year}")
+
+                    if tags:
+                        st.caption(" • ".join(tags))
+
+                    if notes:
+                        st.markdown(f"**Notes:** {notes}")
 
 with edit_tab:
     st.markdown("### Edit Book Details")

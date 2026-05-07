@@ -172,3 +172,138 @@ ORDER BY ReaderName, MiniBookStage, Authors, SeriesName, BookNumber, Title;
 SELECT *
 FROM vw_reader_mini_books_dashboard_summary
 ORDER BY ReaderName, MiniBookStage;
+
+
+-- Total owned audiobook hours
+SELECT
+    SUM(DurationMinutes) AS TotalMinutes,
+    CAST(SUM(DurationMinutes) / 60.0 AS DECIMAL(10,2)) AS TotalHours
+FROM audiobook_versions
+WHERE DurationMinutes IS NOT NULL;
+GO
+
+
+-- Average audiobook length
+SELECT
+    COUNT(*) AS AudiobookVersionsWithDuration,
+    CAST(AVG(DurationMinutes) AS DECIMAL(10,2)) AS AverageMinutes,
+    CAST(AVG(DurationMinutes) / 60.0 AS DECIMAL(10,2)) AS AverageHours
+FROM audiobook_versions
+WHERE DurationMinutes IS NOT NULL;
+GO
+
+
+-- Longest audiobooks
+SELECT TOP 25
+    avd.Title,
+    avd.Narrators,
+    avd.Publisher,
+    avd.ReleaseYear,
+    avd.DurationMinutes,
+    avd.DurationDisplay
+FROM vw_audiobook_version_details avd
+WHERE avd.DurationMinutes IS NOT NULL
+ORDER BY avd.DurationMinutes DESC;
+GO
+
+
+-- Shortest audiobooks
+SELECT TOP 25
+    avd.Title,
+    avd.Narrators,
+    avd.Publisher,
+    avd.ReleaseYear,
+    avd.DurationMinutes,
+    avd.DurationDisplay
+FROM vw_audiobook_version_details avd
+WHERE avd.DurationMinutes IS NOT NULL
+ORDER BY avd.DurationMinutes ASC;
+GO
+
+
+-- Narrator frequency rankings
+SELECT
+    n.NarratorName,
+    COUNT(DISTINCT avn.AudiobookVersionID) AS AudiobookVersionCount,
+    COUNT(DISTINCT av.BookID) AS BookCount,
+    SUM(av.DurationMinutes) AS TotalNarratedMinutes,
+    CAST(SUM(av.DurationMinutes) / 60.0 AS DECIMAL(10,2)) AS TotalNarratedHours
+FROM narrators n
+JOIN audiobook_version_narrators avn
+    ON avn.NarratorID = n.NarratorID
+JOIN audiobook_versions av
+    ON av.AudiobookVersionID = avn.AudiobookVersionID
+GROUP BY n.NarratorName
+ORDER BY AudiobookVersionCount DESC, n.NarratorName;
+GO
+
+
+-- Average series length
+-- Excludes Standalone
+WITH SeriesCounts AS (
+    SELECT
+        s.SeriesID,
+        s.SeriesName,
+        COUNT(b.BookID) AS BookCount
+    FROM series s
+    JOIN books b
+        ON b.SeriesID = s.SeriesID
+    WHERE s.SeriesName <> 'Standalone'
+    GROUP BY s.SeriesID, s.SeriesName
+)
+SELECT
+    COUNT(*) AS SeriesCount,
+    CAST(AVG(BookCount * 1.0) AS DECIMAL(10,2)) AS AverageBooksPerSeries,
+    MIN(BookCount) AS ShortestSeriesLength,
+    MAX(BookCount) AS LongestSeriesLength
+FROM SeriesCounts;
+GO
+
+
+-- Full-cast vs single/multi narrator ratios
+WITH VersionNarratorCounts AS (
+    SELECT
+        av.AudiobookVersionID,
+        av.IsFullCast,
+        COUNT(avn.NarratorID) AS NarratorCount
+    FROM audiobook_versions av
+    LEFT JOIN audiobook_version_narrators avn
+        ON avn.AudiobookVersionID = av.AudiobookVersionID
+    GROUP BY av.AudiobookVersionID, av.IsFullCast
+)
+SELECT
+    CASE
+        WHEN IsFullCast = 1 THEN 'Full Cast'
+        WHEN NarratorCount = 1 THEN 'Single Narrator'
+        WHEN NarratorCount > 1 THEN 'Multiple Narrators'
+        ELSE 'No Narrator Listed'
+    END AS NarrationType,
+    COUNT(*) AS VersionCount,
+    CAST(
+        COUNT(*) * 100.0 / SUM(COUNT(*)) OVER ()
+        AS DECIMAL(5,2)
+    ) AS PercentOfCollection
+FROM VersionNarratorCounts
+GROUP BY
+    CASE
+        WHEN IsFullCast = 1 THEN 'Full Cast'
+        WHEN NarratorCount = 1 THEN 'Single Narrator'
+        WHEN NarratorCount > 1 THEN 'Multiple Narrators'
+        ELSE 'No Narrator Listed'
+    END
+ORDER BY VersionCount DESC;
+GO
+
+
+-- Yearly audiobook publication trends
+SELECT
+    ReleaseYear,
+    COUNT(*) AS AudiobookVersionCount,
+    COUNT(DISTINCT BookID) AS UniqueBookCount,
+    SUM(DurationMinutes) AS TotalMinutes,
+    CAST(SUM(DurationMinutes) / 60.0 AS DECIMAL(10,2)) AS TotalHours
+FROM audiobook_versions
+WHERE ReleaseYear IS NOT NULL
+GROUP BY ReleaseYear
+ORDER BY ReleaseYear;
+GO

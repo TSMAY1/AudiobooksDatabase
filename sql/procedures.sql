@@ -9,7 +9,7 @@ GO
 CREATE OR ALTER PROCEDURE AddBook
 	@Title NVARCHAR(255),
 	@Authors NVARCHAR(MAX), -- e.g. 'Brandon Sanderson' or 'Brandon Sanderson, Janci Patterson'
-	@SeriesName NVARCHAR(255) = NULL, 
+	@SeriesName NVARCHAR(255), 
 	@BookNumber DECIMAL(4,1) = NULL,
 	@LengthType NVARCHAR(50) = NULL,
 	@Demographic NVARCHAR(50) = NULL,
@@ -189,6 +189,8 @@ BEGIN
     END;
 
 		COMMIT TRANSACTION;
+
+		SELECT @BookID AS BookID;
 	END TRY
 	BEGIN CATCH
 		IF @@TRANCOUNT > 0
@@ -711,5 +713,348 @@ BEGIN
 
         THROW;
     END CATCH
+END;
+GO
+
+
+--------------------------------------------------
+-- SetReaderFavoriteBook
+-- Sets or replaces the favorite book for a reader
+--------------------------------------------------
+
+CREATE OR ALTER PROCEDURE SetReaderFavoriteBook
+    @ReaderName NVARCHAR(255),
+    @BookID INT,
+    @FavoriteNotes NVARCHAR(500) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+
+    BEGIN TRANSACTION;
+
+    BEGIN TRY
+        DECLARE @ReaderID INT;
+
+        SELECT @ReaderID = ReaderID
+        FROM readers
+        WHERE ReaderName = LTRIM(RTRIM(@ReaderName));
+
+        IF @ReaderID IS NULL
+        BEGIN
+            RAISERROR('Reader not found.', 16, 1);
+        END;
+
+        IF NOT EXISTS (
+            SELECT 1
+            FROM books
+            WHERE BookID = @BookID
+        )
+        BEGIN
+            RAISERROR('Book not found.', 16, 1);
+        END;
+
+        IF NOT EXISTS (
+            SELECT 1
+            FROM reading_status
+            WHERE ReaderID = @ReaderID
+              AND BookID = @BookID
+        )
+        BEGIN
+            RAISERROR('This book is not linked to the selected reader.', 16, 1);
+        END;
+
+        IF EXISTS (
+            SELECT 1
+            FROM reader_favorite_books
+            WHERE ReaderID = @ReaderID
+        )
+        BEGIN
+            UPDATE reader_favorite_books
+            SET BookID = @BookID,
+                FavoriteNotes = NULLIF(LTRIM(RTRIM(@FavoriteNotes)), ''),
+                DateSelected = SYSDATETIME()
+            WHERE ReaderID = @ReaderID;
+        END
+        ELSE
+        BEGIN
+            INSERT INTO reader_favorite_books (
+                ReaderID,
+                BookID,
+                FavoriteNotes
+            )
+            VALUES (
+                @ReaderID,
+                @BookID,
+                NULLIF(LTRIM(RTRIM(@FavoriteNotes)), '')
+            );
+        END;
+
+        COMMIT TRANSACTION;
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0
+            ROLLBACK TRANSACTION;
+
+        THROW;
+    END CATCH
+END;
+GO
+
+
+--------------------------------------------------
+-- ClearReaderFavoriteBook
+-- Removes the favorite book for a reader
+--------------------------------------------------
+
+CREATE OR ALTER PROCEDURE ClearReaderFavoriteBook
+    @ReaderName NVARCHAR(255)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+
+    BEGIN TRANSACTION;
+
+    BEGIN TRY
+        DECLARE @ReaderID INT;
+
+        SELECT @ReaderID = ReaderID
+        FROM readers
+        WHERE ReaderName = LTRIM(RTRIM(@ReaderName));
+
+        IF @ReaderID IS NULL
+        BEGIN
+            RAISERROR('Reader not found.', 16, 1);
+        END;
+
+        DELETE FROM reader_favorite_books
+        WHERE ReaderID = @ReaderID;
+
+        COMMIT TRANSACTION;
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0
+            ROLLBACK TRANSACTION;
+
+        THROW;
+    END CATCH
+END;
+GO
+
+--------------------------------------------------
+-- AddAudiobookVersion
+-- Adds a new audiobook version for a book with its details and narrators
+--------------------------------------------------
+
+CREATE OR ALTER PROCEDURE AddAudiobookVersion
+    @BookID INT,
+    @EditionName NVARCHAR(255) = NULL,
+    @Publisher NVARCHAR(255) = NULL,
+    @ReleaseYear INT = NULL,
+    @DurationMinutes INT = NULL,
+    @IsAbridged BIT = 0,
+    @IsFullCast BIT = 0,
+    @Notes NVARCHAR(MAX) = NULL,
+    @Narrators NVARCHAR(MAX) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+
+    BEGIN TRANSACTION;
+
+    DECLARE @AudiobookVersionID INT;
+
+    INSERT INTO audiobook_versions (
+        BookID,
+        EditionName,
+        Publisher,
+        ReleaseYear,
+        DurationMinutes,
+        IsAbridged,
+        IsFullCast,
+        Notes
+    )
+    VALUES (
+        @BookID,
+        @EditionName,
+        @Publisher,
+        @ReleaseYear,
+        @DurationMinutes,
+        @IsAbridged,
+        @IsFullCast,
+        @Notes
+    );
+
+    SET @AudiobookVersionID = SCOPE_IDENTITY();
+
+    IF @Narrators IS NOT NULL AND LTRIM(RTRIM(@Narrators)) <> ''
+    BEGIN
+        DECLARE @NarratorTable TABLE (
+            NarratorName NVARCHAR(255),
+            RowNum INT IDENTITY(1,1)
+        );
+
+        INSERT INTO @NarratorTable (NarratorName)
+        SELECT LTRIM(RTRIM(value))
+        FROM STRING_SPLIT(@Narrators, ',');
+
+        DECLARE @CurrentNarrator NVARCHAR(255);
+        DECLARE @NarratorID INT;
+        DECLARE @i INT = 1;
+        DECLARE @max INT = (SELECT COUNT(*) FROM @NarratorTable);
+
+        WHILE @i <= @max
+        BEGIN
+            SELECT @CurrentNarrator = NarratorName
+            FROM @NarratorTable
+            WHERE RowNum = @i;
+
+            IF @CurrentNarrator <> ''
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1
+                    FROM narrators
+                    WHERE NarratorName = @CurrentNarrator
+                )
+                BEGIN
+                    INSERT INTO narrators (NarratorName)
+                    VALUES (@CurrentNarrator);
+                END
+
+                SELECT @NarratorID = NarratorID
+                FROM narrators
+                WHERE NarratorName = @CurrentNarrator;
+
+                INSERT INTO audiobook_version_narrators (
+                    AudiobookVersionID,
+                    NarratorID,
+                    DisplayOrder
+                )
+                VALUES (
+                    @AudiobookVersionID,
+                    @NarratorID,
+                    @i
+                );
+            END
+
+            SET @i += 1;
+        END
+    END
+
+    COMMIT TRANSACTION;
+END;
+GO
+
+--------------------------------------------------
+-- DeleteAudiobookVersion
+-- Deletes an audiobook version and its associated narrators
+--------------------------------------------------
+
+CREATE OR ALTER PROCEDURE DeleteAudiobookVersion
+    @AudiobookVersionID INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+
+    BEGIN TRANSACTION;
+
+    DELETE FROM audiobook_version_narrators
+    WHERE AudiobookVersionID = @AudiobookVersionID;
+
+    DELETE FROM audiobook_versions
+    WHERE AudiobookVersionID = @AudiobookVersionID;
+
+    COMMIT TRANSACTION;
+END;
+GO
+
+--------------------------------------------------
+-- AddReaderBookComment
+-- Adds a reader's comment/thoughts for a book
+--------------------------------------------------
+
+CREATE OR ALTER PROCEDURE AddReaderBookComment
+    @BookID INT,
+    @ReaderName NVARCHAR(255),
+    @CommentText NVARCHAR(MAX)
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+
+    BEGIN TRANSACTION;
+
+    BEGIN TRY
+        DECLARE @ReaderID INT;
+        DECLARE @TrimmedComment NVARCHAR(MAX) = LTRIM(RTRIM(@CommentText));
+
+        IF NOT EXISTS (
+            SELECT 1
+            FROM books
+            WHERE BookID = @BookID
+        )
+        BEGIN
+            RAISERROR('Book not found.', 16, 1);
+        END;
+
+        SELECT @ReaderID = ReaderID
+        FROM readers
+        WHERE ReaderName = LTRIM(RTRIM(@ReaderName));
+
+        IF @ReaderID IS NULL
+        BEGIN
+            RAISERROR('Reader not found.', 16, 1);
+        END;
+
+        IF @TrimmedComment IS NULL OR @TrimmedComment = ''
+        BEGIN
+            RAISERROR('Comment cannot be blank.', 16, 1);
+        END;
+
+        INSERT INTO reader_book_comments (
+            ReaderID,
+            BookID,
+            CommentText
+        )
+        VALUES (
+            @ReaderID,
+            @BookID,
+            @TrimmedComment
+        );
+
+        COMMIT TRANSACTION;
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0
+            ROLLBACK TRANSACTION;
+
+        THROW;
+    END CATCH
+END;
+GO
+
+
+--------------------------------------------------
+-- DeleteReaderBookComment
+-- Deletes one reader book comment
+--------------------------------------------------
+
+CREATE OR ALTER PROCEDURE DeleteReaderBookComment
+    @CommentID INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+
+    DELETE FROM reader_book_comments
+    WHERE CommentID = @CommentID;
+
+    IF @@ROWCOUNT = 0
+    BEGIN
+        RAISERROR('Comment not found.', 16, 1);
+    END;
 END;
 GO

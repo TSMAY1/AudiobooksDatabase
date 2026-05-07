@@ -46,10 +46,9 @@ GO
 -- Book details view
 
 CREATE OR ALTER VIEW vw_book_details AS
-
 SELECT
     b.BookID,
-    STRING_AGG(a.AuthorName, ', ') AS Authors,
+    STRING_AGG(a.AuthorName, ', ') WITHIN GROUP (ORDER BY ba.AuthorOrder, a.AuthorName) AS Authors,
     b.Title,
     s.SeriesID,
     s.SeriesName,
@@ -57,7 +56,10 @@ SELECT
     COALESCE(p.SeriesName, s.SeriesName) AS UniverseName,
     b.BookNumber,
     b.UniverseReadingOrder,
-    b.Full_Cast
+    b.LengthType,
+    b.Demographic,
+    b.Full_Cast,
+    b.Notes
 FROM books b
 JOIN book_authors ba
     ON ba.BookID = b.BookID
@@ -75,7 +77,10 @@ GROUP BY
     p.SeriesName,
     b.BookNumber,
     b.UniverseReadingOrder,
-    b.Full_Cast;
+    b.LengthType,
+    b.Demographic,
+    b.Full_Cast,
+    b.Notes;
 GO
 
 -- Reader activity view
@@ -93,6 +98,33 @@ JOIN books b
 	ON b.BookID = rs.BookID
 JOIN readers r
 	ON r.ReaderID = rs.ReaderID;
+GO
+
+-- reader favourite books
+
+CREATE OR ALTER VIEW vw_reader_favorite_books AS
+SELECT
+    r.ReaderID,
+    r.ReaderName,
+    b.BookID,
+    b.Title,
+    bd.Authors,
+    bd.SeriesName,
+    bd.BookNumber,
+    rs.ReadingStatus,
+    rs.Rating,
+    rfb.FavoriteNotes,
+    rfb.DateSelected
+FROM reader_favorite_books rfb
+JOIN readers r
+    ON r.ReaderID = rfb.ReaderID
+JOIN books b
+    ON b.BookID = rfb.BookID
+JOIN vw_book_details bd
+    ON bd.BookID = b.BookID
+LEFT JOIN reading_status rs
+    ON rs.ReaderID = r.ReaderID
+   AND rs.BookID = b.BookID;
 GO
 
 -- book club view
@@ -325,4 +357,101 @@ JOIN books b
     ON b.BookID = bc.BookID;
 GO
 
+-- Audiobook version details view
 
+CREATE OR ALTER VIEW vw_audiobook_version_details AS
+
+SELECT
+    av.AudiobookVersionID,
+    av.BookID,
+    b.Title,
+    av.EditionName,
+    av.Publisher,
+    av.ReleaseYear,
+    av.DurationMinutes,
+    CASE
+        WHEN av.DurationMinutes IS NULL THEN NULL
+        ELSE CONCAT(
+            av.DurationMinutes / 60, 'h ',
+            RIGHT('0' + CAST(av.DurationMinutes % 60 AS VARCHAR(2)), 2), 'm'
+        )
+    END AS DurationDisplay,
+    av.IsAbridged,
+    av.IsFullCast,
+    av.Notes,
+    STRING_AGG(n.NarratorName, ', ') WITHIN GROUP (ORDER BY avn.DisplayOrder, n.NarratorName) AS Narrators
+FROM audiobook_versions av
+JOIN books b
+    ON b.BookID = av.BookID
+LEFT JOIN audiobook_version_narrators avn
+    ON avn.AudiobookVersionID = av.AudiobookVersionID
+LEFT JOIN narrators n
+    ON n.NarratorID = avn.NarratorID
+GROUP BY
+    av.AudiobookVersionID,
+    av.BookID,
+    b.Title,
+    av.EditionName,
+    av.Publisher,
+    av.ReleaseYear,
+    av.DurationMinutes,
+    av.IsAbridged,
+    av.IsFullCast,
+    av.Notes;
+GO
+
+-- Audiobooks by book view
+
+CREATE OR ALTER VIEW vw_book_audiobooks AS
+
+SELECT
+    av.BookID,
+    av.AudiobookVersionID,
+    av.EditionName,
+    av.Publisher,
+    av.ReleaseYear,
+    av.DurationMinutes,
+    CASE
+        WHEN av.DurationMinutes IS NULL THEN NULL
+        ELSE CONCAT(
+            av.DurationMinutes / 60, 'h ',
+            RIGHT('0' + CAST(av.DurationMinutes % 60 AS VARCHAR(2)), 2), 'm'
+        )
+    END AS DurationDisplay,
+    av.IsAbridged,
+    av.IsFullCast,
+    av.Notes,
+    STRING_AGG(n.NarratorName, ', ') WITHIN GROUP (ORDER BY avn.DisplayOrder, n.NarratorName) AS Narrators
+FROM audiobook_versions av
+LEFT JOIN audiobook_version_narrators avn
+    ON avn.AudiobookVersionID = av.AudiobookVersionID
+LEFT JOIN narrators n
+    ON n.NarratorID = avn.NarratorID
+GROUP BY
+    av.BookID,
+    av.AudiobookVersionID,
+    av.EditionName,
+    av.Publisher,
+    av.ReleaseYear,
+    av.DurationMinutes,
+    av.IsAbridged,
+    av.IsFullCast,
+    av.Notes;
+GO
+
+
+CREATE OR ALTER VIEW vw_reader_book_comments AS
+SELECT
+    rbc.CommentID,
+    rbc.ReaderID,
+    r.ReaderName,
+    rbc.BookID,
+    b.Title,
+    rbc.CommentText,
+    rbc.DateAdded
+FROM reader_book_comments rbc
+JOIN readers r
+    ON r.ReaderID = rbc.ReaderID
+JOIN books b
+    ON b.BookID = rbc.BookID;
+GO
