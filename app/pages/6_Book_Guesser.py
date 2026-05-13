@@ -22,7 +22,7 @@ def load_random_book_pool(category: str):
             )
         """
 
-    elif category == "Books onlyTori has read":
+    elif category == "Books only Tori has read":
         where_clause = """
         WHERE ToriStatus.ReadingStatus = 'Read'
         AND (
@@ -65,7 +65,6 @@ def load_random_book_pool(category: str):
         vd.LengthType,
         vd.Demographic,
         vd.Notes,
-        vd.Full_Cast,
         pc.ImageFilePath AS CoverImagePath,
         AngelaStatus.ReadingStatus AS AngelaStatus,
         ToriStatus.ReadingStatus AS ToriStatus,
@@ -306,7 +305,7 @@ with right_col:
         render_meta("Length Type", book.get("LengthType"), "⏱️")
         render_meta("Demographic", book.get("Demographic"), "👥")
 
-        render_meta("Full Cast", yes_no(book.get("Full_Cast")), "🎭")
+        render_meta("Full Cast Audiobook", yes_no(book.get("IsFullCast")), "🎭")
 
     with st.container(border=True):
         st.markdown("### Genres")

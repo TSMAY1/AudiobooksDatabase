@@ -164,7 +164,7 @@ nav_col1, nav_col2 = st.columns([1, 3])
 with nav_col1:
     if st.button("📖 Go to Book Details", width="stretch"):
         st.session_state["selected_book_id"] = int(selected_book_id)
-        st.switch_page("pages/2_Book_Details.py")
+        st.switch_page("pages/3_Book_Details.py")
 
 st.divider()
 
@@ -413,7 +413,7 @@ bottom_col1, bottom_col2 = st.columns([1, 1])
 
 with bottom_col1:
     if st.button("⬅ Back to Library", key="audiobooks_back", width="stretch"):
-        st.switch_page("pages/1_Library.py")
+        st.switch_page("pages/2_Library.py")
 
 with bottom_col2:
     if st.button("🔄 Refresh page", width="stretch"):

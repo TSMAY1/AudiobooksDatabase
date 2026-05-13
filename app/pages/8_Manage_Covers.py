@@ -179,7 +179,11 @@ if not book_ids:
 default_cover_book_id = preferred_book_id if preferred_book_id in book_ids else book_ids[0]
 
 # Only initialize/reset BEFORE the widget is instantiated
-if (
+# If another page specifically sent us a book, force the selectbox to that book.
+if incoming_cover_book_id is not None and incoming_cover_book_id in book_ids:
+    st.session_state["manage_covers_selected_book_id"] = int(incoming_cover_book_id)
+
+elif (
     "manage_covers_selected_book_id" not in st.session_state
     or st.session_state["manage_covers_selected_book_id"] not in book_ids
 ):
@@ -202,7 +206,7 @@ nav_col1, nav_col2 = st.columns([1, 3])
 with nav_col1:
     if st.button("📖 Go to Book Details", width="stretch"):
         st.session_state["selected_book_id"] = int(selected_book_id)
-        st.switch_page("pages/2_Book_Details.py")
+        st.switch_page("pages/3_Book_Details.py")
 
 st.divider()
 

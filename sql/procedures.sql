@@ -13,7 +13,6 @@ CREATE OR ALTER PROCEDURE AddBook
 	@BookNumber DECIMAL(4,1) = NULL,
 	@LengthType NVARCHAR(50) = NULL,
 	@Demographic NVARCHAR(50) = NULL,
-	@Full_Cast BIT = NULL,
 	@Notes NVARCHAR(MAX) = NULL,
 	@MainGenres NVARCHAR(MAX) = NULL, -- e.g. 'Fantasy'
 	@SecondaryGenres NVARCHAR(MAX) = NULL -- e.g. 'Magic, Politics'
@@ -71,7 +70,6 @@ BEGIN
 			BookNumber,
 			LengthType,
 			Demographic,
-			Full_Cast,
 			Notes
 		)
 		VALUES (
@@ -80,7 +78,6 @@ BEGIN
 			@BookNumber,
 			@LengthType,
 			@Demographic,
-			@Full_Cast,
 			@Notes
 		);
 
@@ -554,7 +551,6 @@ CREATE OR ALTER PROCEDURE UpdateBookCoreDetails
     @UniverseReadingOrder DECIMAL(5,2) = NULL,
     @LengthType NVARCHAR(50) = NULL,
     @Demographic NVARCHAR(50) = NULL,
-    @Full_Cast BIT = NULL,
     @Notes NVARCHAR(MAX) = NULL
 AS
 BEGIN
@@ -623,7 +619,6 @@ BEGIN
             UniverseReadingOrder = @UniverseReadingOrder,
             LengthType = NULLIF(LTRIM(RTRIM(@LengthType)), ''),
             Demographic = NULLIF(LTRIM(RTRIM(@Demographic)), ''),
-            Full_Cast = @Full_Cast,
             Notes = NULLIF(LTRIM(RTRIM(@Notes)), '')
         WHERE BookID = @BookID;
 
@@ -1056,5 +1051,82 @@ BEGIN
     BEGIN
         RAISERROR('Comment not found.', 16, 1);
     END;
+END;
+GO
+
+
+--------------------------------------------------
+-- SetSeriesParent
+-- Sets the universe parent series for a series
+--------------------------------------------------
+
+CREATE OR ALTER PROCEDURE SetSeriesParent
+    @SeriesName NVARCHAR(255),
+    @ParentSeriesName NVARCHAR(255) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+
+    BEGIN TRANSACTION;
+
+    BEGIN TRY
+        DECLARE @SeriesID INT;
+        DECLARE @ParentSeriesID INT = NULL;
+
+        SET @SeriesName = LTRIM(RTRIM(@SeriesName));
+        SET @ParentSeriesName = NULLIF(LTRIM(RTRIM(@ParentSeriesName)), '');
+
+        IF @SeriesName IS NULL OR @SeriesName = ''
+            RAISERROR('Series name is required.', 16, 1);
+
+        IF @SeriesName = 'Standalone'
+            RAISERROR('Standalone should not be assigned to a universe.', 16, 1);
+
+        SELECT @SeriesID = SeriesID
+        FROM series
+        WHERE SeriesName = @SeriesName;
+
+        IF @SeriesID IS NULL
+            RAISERROR('Series not found.', 16, 1);
+
+        IF @ParentSeriesName IS NOT NULL
+        BEGIN
+            IF @ParentSeriesName = @SeriesName
+                RAISERROR('A series cannot be its own parent universe.', 16, 1);
+
+            IF NOT EXISTS (
+                SELECT 1 FROM series WHERE SeriesName = @ParentSeriesName
+            )
+            BEGIN
+                INSERT INTO series (SeriesName)
+                VALUES (@ParentSeriesName);
+            END;
+
+            SELECT @ParentSeriesID = SeriesID
+            FROM series
+            WHERE SeriesName = @ParentSeriesName;
+
+            IF EXISTS (
+                SELECT 1
+                FROM series
+                WHERE SeriesID = @ParentSeriesID
+                  AND ParentSeriesID = @SeriesID
+            )
+                RAISERROR('This would create a parent/child loop.', 16, 1);
+        END;
+
+        UPDATE series
+        SET ParentSeriesID = @ParentSeriesID
+        WHERE SeriesID = @SeriesID;
+
+        COMMIT TRANSACTION;
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0
+            ROLLBACK TRANSACTION;
+
+        THROW;
+    END CATCH
 END;
 GO

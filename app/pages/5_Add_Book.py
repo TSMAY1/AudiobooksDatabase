@@ -111,8 +111,6 @@ with st.form("add_book_form"):
         with meta_col2:
             demographic = st.text_input("Demographic")
 
-        full_cast = st.checkbox("Full Cast")
-
     with genres_tab:
         st.markdown("### Genres & Notes")
 
@@ -268,7 +266,6 @@ if submitted:
                 book_number,
                 length_type.strip() if length_type.strip() else None,
                 demographic.strip() if demographic.strip() else None,
-                int(full_cast),
                 notes.strip() if notes.strip() else None,
                 main_genres.strip() if main_genres.strip() else None,
                 secondary_genres.strip() if secondary_genres.strip() else None,
@@ -341,12 +338,12 @@ if st.session_state.get("last_added_book_id"):
     with action_col1:
         if st.button("📖 View Details", width="stretch"):
             st.session_state["selected_book_id"] = int(st.session_state["last_added_book_id"])
-            st.switch_page("pages/2_Book_Details.py")
+            st.switch_page("pages/3_Book_Details.py")
 
     with action_col2:
         if st.button("🖼️ Manage Covers", width="stretch"):
             st.session_state["navigate_to_cover_book_id"] = int(st.session_state["last_added_book_id"])
-            st.switch_page("pages/6_Manage_Covers.py")
+            st.switch_page("pages/8_Manage_Covers.py")
 
     with action_col3:
         if st.button("🎧 Manage Audiobooks", width="stretch"):

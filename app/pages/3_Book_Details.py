@@ -40,7 +40,6 @@ def load_book_detail(book_id: int, cache_buster: int = 0):
             CASE WHEN bg.GenreType = 'Secondary' THEN g.GenreName END,
             ', '
         ) AS SecondaryGenres,
-        vd.Full_Cast,
         pc.ImageFilePath AS CoverImagePath
     FROM vw_book_details vd
     LEFT JOIN book_genres bg
@@ -62,7 +61,6 @@ def load_book_detail(book_id: int, cache_buster: int = 0):
         vd.LengthType,
         vd.Demographic,
         vd.Notes,
-        vd.Full_Cast,
         pc.ImageFilePath;
     """
 
@@ -164,7 +162,6 @@ def load_book_for_edit(book_id: int, cache_buster: int = 0):
             UniverseReadingOrder,
             LengthType,
             Demographic,
-            Full_Cast,
             Notes
         FROM vw_book_edit_details
         WHERE BookID = ?;
@@ -205,6 +202,18 @@ def load_book_comments(book_id: int, cache_buster: int = 0):
         ORDER BY DateAdded DESC, CommentID DESC;
     """, params=[book_id])
 
+@st.cache_data(show_spinner=False)
+def load_series_parent_options(cache_buster: int = 0):
+    return run_query("""
+        SELECT
+            child.SeriesName,
+            parent.SeriesName AS ParentSeriesName
+        FROM series child
+        LEFT JOIN series parent
+            ON parent.SeriesID = child.ParentSeriesID
+        ORDER BY child.SeriesName;
+    """)
+
 # =========================================================
 # Cache clearing
 # =========================================================
@@ -218,6 +227,7 @@ def clear_book_details_caches():
     load_cover_image_bytes.clear()
     load_book_audiobooks.clear()
     load_book_comments.clear()
+    load_series_parent_options.clear()
 
     st.session_state["book_details_cache_buster"] = (
         st.session_state.get("book_details_cache_buster", 0) + 1
@@ -362,7 +372,7 @@ if not book_id:
             st.rerun()
 
     if st.button("⬅ Back to Library"):
-        st.switch_page("pages/1_Library.py")
+        st.switch_page("pages/2_Library.py")
     st.stop()
 
 
@@ -379,7 +389,7 @@ comments_df = load_book_comments(book_id, cache_buster=cache_buster)
 if book_df.empty:
     st.error("Book not found.")
     if st.button("⬅ Back to Library"):
-        st.switch_page("pages/1_Library.py")
+        st.switch_page("pages/2_Library.py")
     st.stop()
 
 book = book_df.iloc[0]
@@ -408,11 +418,11 @@ with header_left:
     st.markdown("### Actions")
 
     if st.button("⬅ Back to Library", width='stretch'):
-        st.switch_page("pages/1_Library.py")
+        st.switch_page("pages/2_Library.py")
 
     if st.button("🖼️ Manage Covers", width='stretch'):
         st.session_state["navigate_to_cover_book_id"] = int(book_id)
-        st.switch_page("pages/6_Manage_Covers.py")
+        st.switch_page("pages/8_Manage_Covers.py")
 
     button_col1, button_col2 = st.columns(2)
 
@@ -455,11 +465,6 @@ with header_right:
         if pd.notna(book.get("UniverseReadingOrder")):
             render_meta_row("Universe Reading Order", book["UniverseReadingOrder"], "🔢")
 
-        if book["Full_Cast"] in [True, 1]:
-            render_meta_row("Audio", "Full Cast Audio", "🎭")
-        else:
-            render_meta_row("Audio", "Standard Audiobook", "🎧")
-
         if pd.notna(book.get("LengthType")) and book["LengthType"]:
             render_meta_row("Length Type", book["LengthType"], "⏱️")
 
@@ -467,14 +472,21 @@ with header_right:
             render_meta_row("Demographic", book["Demographic"], "👥")
 
     with st.container(border=True):
-        st.markdown("### Reader Status")
-        if reader_df.empty or reader_df["ReadingStatus"].dropna().empty:
-            st.caption("No reader statuses recorded yet.")
-        else:
-            for _, row in reader_df.iterrows():
-                if pd.notna(row.get("ReadingStatus")):
-                    render_status_chip(row["ReaderName"], row["ReadingStatus"])
+                st.markdown("### Genres")
 
+                if main_genres:
+                    st.markdown("**Main Genres**")
+                    st.write(", ".join(main_genres))
+                else:
+                    st.caption("No main genres recorded.")
+
+                st.markdown("")
+
+                if secondary_genres:
+                    st.markdown("**Secondary Genres**")
+                    st.write(", ".join(secondary_genres))
+                else:
+                    st.caption("No secondary genres recorded.")
 
 st.divider()
 
@@ -491,88 +503,26 @@ with overview_tab:
 
     with info_left:
         with st.container(border=True):
-            st.markdown("### Genres")
+            st.markdown("### Reader Status")
 
-            if main_genres:
-                st.markdown("**Main Genres**")
-                st.write(", ".join(main_genres))
+            if reader_df.empty or reader_df["ReadingStatus"].dropna().empty:
+                st.caption("No reader statuses recorded yet.")
             else:
-                st.caption("No main genres recorded.")
+                chip_cols = st.columns(len(reader_df))
 
-            st.markdown("")
+                for col, (_, row) in zip(chip_cols, reader_df.iterrows()):
+                    with col:
+                        if pd.notna(row.get("ReadingStatus")):
+                            render_status_chip(row["ReaderName"], row["ReadingStatus"])
 
-            if secondary_genres:
-                st.markdown("**Secondary Genres**")
-                st.write(", ".join(secondary_genres))
-            else:
-                st.caption("No secondary genres recorded.")
-
-    with info_right:
-        with st.container(border=True):
-            st.markdown("### Library Notes")
-            if pd.notna(book.get("Notes")) and str(book["Notes"]).strip():
-                st.write(book["Notes"])
-            else:
-                st.caption("No notes recorded for this book.")
+        with info_right:
+            with st.container(border=True):
+                st.markdown("### Library Notes")
+                if pd.notna(book.get("Notes")) and str(book["Notes"]).strip():
+                    st.write(book["Notes"])
+                else:
+                    st.caption("No notes recorded for this book.")
     
-    st.markdown("")
-
-    with st.container(border=True):
-        st.markdown("### 💬 Reader Comments")
-
-        readers = load_readers()
-
-        with st.form(f"add_comment_form_{book['BookID']}"):
-            comment_reader = st.selectbox(
-                "Reader",
-                readers,
-                key=f"comment_reader_{book['BookID']}",
-            )
-
-            comment_text = st.text_area(
-                "Add a comment",
-                height=120,
-                placeholder="What did this reader think of the book?",
-                key=f"comment_text_{book['BookID']}",
-            )
-
-            submitted_comment = st.form_submit_button(
-                "💬 Add Comment",
-                width='stretch',
-            )
-
-        if submitted_comment:
-            add_reader_book_comment(
-                int(book["BookID"]),
-                comment_reader,
-                comment_text,
-            )
-
-        st.divider()
-
-        if comments_df.empty:
-            st.caption("No reader comments yet.")
-        else:
-            for _, row in comments_df.iterrows():
-                comment_id = int(row["CommentID"])
-
-                with st.container(border=True):
-                    st.markdown(f"**{row['ReaderName']}**")
-                    st.write(row["CommentText"])
-
-                    if pd.notna(row["DateAdded"]):
-                        formatted_date = row["DateAdded"].strftime("%b %d, %Y • %I:%M %p")
-                        st.caption(f"Added: {formatted_date}")
-
-                    st.markdown("")
-
-                    if st.button(
-                        "🗑️ Delete Comment",
-                        key=f"delete_comment_{comment_id}",
-                        use_container_width=True,
-                    ):
-                        delete_reader_book_comment(comment_id)
-
     st.markdown("")
 
     with st.container(border=True):
@@ -641,6 +591,64 @@ with overview_tab:
                     if notes:
                         st.markdown(f"**Notes:** {notes}")
 
+    st.markdown("")
+
+    with st.container(border=True):
+        st.markdown("### 💬 Reader Comments")
+
+        readers = load_readers()
+
+        with st.form(f"add_comment_form_{book['BookID']}"):
+            comment_reader = st.selectbox(
+                "Reader",
+                readers,
+                key=f"comment_reader_{book['BookID']}",
+            )
+
+            comment_text = st.text_area(
+                "Add a comment",
+                height=120,
+                placeholder="What did this reader think of the book?",
+                key=f"comment_text_{book['BookID']}",
+            )
+
+            submitted_comment = st.form_submit_button(
+                "💬 Add Comment",
+                width='stretch',
+            )
+
+        if submitted_comment:
+            add_reader_book_comment(
+                int(book["BookID"]),
+                comment_reader,
+                comment_text,
+            )
+
+        st.divider()
+
+        if comments_df.empty:
+            st.caption("No reader comments yet.")
+        else:
+            for _, row in comments_df.iterrows():
+                comment_id = int(row["CommentID"])
+
+                with st.container(border=True):
+                    st.markdown(f"**{row['ReaderName']}**")
+                    st.write(row["CommentText"])
+
+                    if pd.notna(row["DateAdded"]):
+                        formatted_date = row["DateAdded"].strftime("%b %d, %Y • %I:%M %p")
+                        st.caption(f"Added: {formatted_date}")
+
+                    st.markdown("")
+
+                    if st.button(
+                        "🗑️ Delete Comment",
+                        key=f"delete_comment_{comment_id}",
+                        use_container_width=True,
+                    ):
+                        delete_reader_book_comment(comment_id)
+
 with edit_tab:
     st.markdown("### Edit Book Details")
     st.caption("Update core metadata for this book.")
@@ -660,7 +668,6 @@ with edit_tab:
         current_length_type = "" if pd.isna(edit_book["LengthType"]) else str(edit_book["LengthType"])
         current_demographic = "" if pd.isna(edit_book["Demographic"]) else str(edit_book["Demographic"])
         current_notes = "" if pd.isna(edit_book["Notes"]) else str(edit_book["Notes"])
-        current_full_cast = bool(edit_book["Full_Cast"]) if pd.notna(edit_book["Full_Cast"]) else False
 
         series_options_df = run_query("""
             SELECT SeriesName
@@ -668,6 +675,7 @@ with edit_tab:
             ORDER BY SeriesName;
         """)
         series_options = series_options_df["SeriesName"].tolist()
+        series_parent_df = load_series_parent_options(cache_buster=cache_buster)
 
         if current_series not in series_options:
             series_options = [current_series] + series_options
@@ -684,6 +692,38 @@ with edit_tab:
 
             new_series_name = st.text_input(
                 "Or create a new series",
+                value="",
+            )
+
+            current_parent_series = None
+
+            if not series_parent_df.empty:
+                parent_match = series_parent_df[
+                    series_parent_df["SeriesName"] == current_series
+                ]
+
+                if not parent_match.empty and pd.notna(parent_match.iloc[0]["ParentSeriesName"]):
+                    current_parent_series = parent_match.iloc[0]["ParentSeriesName"]
+
+            parent_options = ["No parent universe"] + [
+                name for name in series_options
+                if name not in ["Standalone", current_series]
+            ]
+
+            if current_parent_series in parent_options:
+                parent_index = parent_options.index(current_parent_series)
+            else:
+                parent_index = 0
+
+            parent_series_name = st.selectbox(
+                "Parent Universe",
+                options=parent_options,
+                index=parent_index,
+                help="Use this when a series belongs inside a larger universe.",
+            )
+
+            new_parent_series_name = st.text_input(
+                "Or create a new parent universe",
                 value="",
             )
 
@@ -720,11 +760,6 @@ with edit_tab:
                     value=current_demographic,
                 )
 
-            full_cast = st.checkbox(
-                "Full Cast Audio",
-                value=current_full_cast,
-            )
-
             notes = st.text_area(
                 "Notes",
                 value=current_notes,
@@ -736,6 +771,12 @@ with edit_tab:
         if submitted:
             try:
                 final_series_name = new_series_name.strip() if new_series_name.strip() else series_name
+                final_parent_series_name = (
+                    new_parent_series_name.strip()
+                    if new_parent_series_name.strip()
+                    else None if parent_series_name == "No parent universe"
+                    else parent_series_name
+                )
 
                 book_number = float(book_number_text) if book_number_text.strip() else None
                 universe_order = float(universe_order_text) if universe_order_text.strip() else None
@@ -750,10 +791,18 @@ with edit_tab:
                         universe_order,
                         length_type.strip() if length_type.strip() else None,
                         demographic.strip() if demographic.strip() else None,
-                        1 if full_cast else 0,
                         notes.strip() if notes.strip() else None,
                     ],
                 )
+
+                if final_series_name != "Standalone":
+                    execute_procedure(
+                        "SetSeriesParent",
+                        [
+                            final_series_name.strip(),
+                            final_parent_series_name,
+                        ],
+                    )
 
                 execute_procedure(
                     "UpdateBookAuthors",
@@ -928,7 +977,7 @@ nav_col1, nav_col2 = st.columns([1, 1])
 
 with nav_col1:
     if st.button("⬅ Back to Library", key="bottom_back", width='stretch'):
-        st.switch_page("pages/1_Library.py")
+        st.switch_page("pages/2_Library.py")
 
 with nav_col2:
     if st.button("🔄 Refresh page", width='stretch'):

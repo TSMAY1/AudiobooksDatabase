@@ -27,6 +27,26 @@ def load_narrators(cache_buster: int = 0):
     """)
     return df["NarratorName"].tolist()
 
+@st.cache_data(show_spinner=False)
+def load_publishers(cache_buster: int = 0):
+    df = run_query("""
+        SELECT DISTINCT Publisher
+        FROM vw_book_audiobooks
+        WHERE Publisher IS NOT NULL
+        ORDER BY Publisher;
+    """)
+    return df["Publisher"].tolist()
+
+
+@st.cache_data(show_spinner=False)
+def load_release_years(cache_buster: int = 0):
+    df = run_query("""
+        SELECT DISTINCT ReleaseYear
+        FROM vw_book_audiobooks
+        WHERE ReleaseYear IS NOT NULL
+        ORDER BY ReleaseYear DESC;
+    """)
+    return df["ReleaseYear"].astype(int).tolist()
 
 @st.cache_data(show_spinner=False)
 def load_library_data(cache_buster: int = 0):
@@ -39,6 +59,10 @@ def load_library_data(cache_buster: int = 0):
         vd.UniverseName,
         vd.BookNumber,
         vd.UniverseReadingOrder,
+        vd.DateAdded,
+        ab.Publishers,
+        ab.ReleaseYear,
+        ab.IsFullCast,
         STRING_AGG(
             CASE WHEN bg.GenreType = 'Main' THEN g.GenreName END,
             ', '
@@ -47,7 +71,6 @@ def load_library_data(cache_buster: int = 0):
             CASE WHEN bg.GenreType = 'Secondary' THEN g.GenreName END,
             ', '
         ) AS SecondaryGenres,
-        vd.Full_Cast,
         ab.Narrators,
         ab.DurationMinutes,
         pc.ImageFilePath AS CoverImagePath
@@ -60,7 +83,10 @@ def load_library_data(cache_buster: int = 0):
         SELECT
             BookID,
             STRING_AGG(Narrators, ', ') AS Narrators,
-            MAX(DurationMinutes) AS DurationMinutes
+            MAX(DurationMinutes) AS DurationMinutes,
+            STRING_AGG(Publisher, ', ') AS Publishers,
+            MAX(ReleaseYear) AS ReleaseYear,
+            MAX(CAST(IsFullCast AS INT)) AS IsFullCast
         FROM vw_book_audiobooks
         GROUP BY BookID
     ) ab
@@ -75,9 +101,12 @@ def load_library_data(cache_buster: int = 0):
         vd.UniverseName,
         vd.BookNumber,
         vd.UniverseReadingOrder,
-        vd.Full_Cast,
+        vd.DateAdded,
         ab.Narrators,
         ab.DurationMinutes,
+        ab.IsFullCast,
+        ab.Publishers,
+        ab.ReleaseYear,
         pc.ImageFilePath
     """
 
@@ -100,11 +129,13 @@ def build_df(cache_buster: int = 0):
     books_df, reader_df = load_library_data(cache_buster=cache_buster)
     reader_names = load_readers(cache_buster=cache_buster)
     narrator_names = load_narrators(cache_buster=cache_buster)
+    publisher_names = load_publishers(cache_buster=cache_buster)
+    release_years = load_release_years(cache_buster=cache_buster)
 
     if reader_df.empty:
         df = books_df.copy()
         df["SortOrder"] = df["UniverseReadingOrder"].fillna(df["BookNumber"])
-        return df, reader_names, narrator_names
+        return df, reader_names, narrator_names, publisher_names, release_years
 
     status = reader_df.pivot(index="BookID", columns="ReaderName", values="ReadingStatus")
     rating = reader_df.pivot(index="BookID", columns="ReaderName", values="Rating")
@@ -117,7 +148,7 @@ def build_df(cache_buster: int = 0):
 
     df["SortOrder"] = df["UniverseReadingOrder"].fillna(df["BookNumber"])
 
-    return df, reader_names, narrator_names
+    return df, reader_names, narrator_names, publisher_names, release_years
 
 
 # =========================================================
@@ -129,6 +160,8 @@ def clear_library_caches():
     load_library_data.clear()
     build_df.clear()
     load_cover_image_bytes.clear()
+    load_publishers.clear()
+    load_release_years.clear()
 
     st.session_state["library_cache_buster"] = (
         st.session_state.get("library_cache_buster", 0) + 1
@@ -239,6 +272,15 @@ def render_card(row):
 
         if pd.notna(row.get("DurationMinutes")):
             st.caption(f"⏱️ {format_duration(row['DurationMinutes'])}")
+        
+        if pd.notna(row.get("ReleaseYear")):
+            st.caption(f"📅 {int(row['ReleaseYear'])}")
+
+        if row.get("Publishers"):
+            st.caption(f"🏢 {row['Publishers']}")
+
+        if int(row.get("IsFullCast") or 0) == 1:
+            st.caption("🎭 Full cast")
 
         book_id = int(row["BookID"])
         details_url = f"/Book_Details?book_id={book_id}"
@@ -269,7 +311,7 @@ Open details
 # Load page data
 # =========================================================
 cache_buster = st.session_state.get("library_cache_buster", 0)
-df, readers, narrators = build_df(cache_buster=cache_buster)
+df, readers, narrators, publishers, release_years = build_df(cache_buster=cache_buster)
 
 
 # =========================================================
@@ -287,6 +329,7 @@ with col1:
             "Author",
             "Series",
             "Universe",
+            "Recently Added",
             "Audiobook Length: Shortest First",
             "Audiobook Length: Longest First",
         ],
@@ -302,6 +345,26 @@ with col3:
         ["All narrators"] + narrators,
     )
 
+filter_col1, filter_col2, filter_col3 = st.columns([1, 1, 1])
+
+with filter_col1:
+    selected_publisher = st.selectbox(
+        "Publisher",
+        ["All publishers"] + publishers,
+    )
+
+with filter_col2:
+    selected_release_year = st.selectbox(
+        "Release year",
+        ["All years"] + release_years,
+    )
+
+with filter_col3:
+    full_cast_filter = st.selectbox(
+        "Full cast",
+        ["All", "Full cast only", "Traditional Audiobooks only"],
+    )
+
 if st.button("🔄 Refresh Library", width="stretch"):
     clear_library_caches()
     st.rerun()
@@ -315,6 +378,7 @@ if search:
         df["Title"].str.contains(search, case=False, na=False)
         | df["Authors"].str.contains(search, case=False, na=False)
         | df["SeriesName"].fillna("").str.contains(search, case=False, na=False)
+        | df["UniverseName"].fillna("").str.contains(search, case=False, na=False)
         | df["Narrators"].fillna("").str.contains(search, case=False, na=False)
     ]
 
@@ -324,6 +388,24 @@ if selected_narrator != "All narrators":
         .fillna("")
         .str.contains(selected_narrator, case=False, regex=False)
     ]
+
+if selected_publisher != "All publishers":
+    df = df[
+        df["Publishers"]
+        .fillna("")
+        .str.contains(selected_publisher, case=False, regex=False)
+    ]
+
+if selected_release_year != "All years":
+    df = df[df["ReleaseYear"] == selected_release_year]
+
+if full_cast_filter == "Full cast only":
+    df = df[df["IsFullCast"].fillna(0).astype(int) == 1]
+
+elif full_cast_filter == "Single narrator / not full cast":
+    df = df[df["IsFullCast"].fillna(0).astype(int) == 0]
+
+
 
 
 # =========================================================
@@ -336,7 +418,28 @@ elif sort == "Author":
 elif sort == "Title":
     df = df.sort_values(["Title"], na_position="last")
 elif sort == "Universe":
-    df = df.sort_values(["UniverseName", "SortOrder"], na_position="last")
+    df["UniverseSort"] = (
+        df["UniverseName"]
+        .fillna(df["SeriesName"])
+        .fillna("Standalone")
+    )
+
+    df["UniverseOrderSort"] = (
+        df["UniverseReadingOrder"]
+        .fillna(df["BookNumber"])
+        .fillna(999999)
+    )
+
+    df = df.sort_values(
+        ["UniverseSort", "UniverseOrderSort", "SeriesName", "BookNumber", "Title"],
+        na_position="last",
+    )
+elif sort == "Recently Added":
+    df = df.sort_values(
+        ["DateAdded", "Title"],
+        ascending=[False, True],
+        na_position="last",
+    )
 elif sort == "Audiobook Length: Shortest First":
     df = df.sort_values(["DurationMinutes", "Title"], na_position="last")
 elif sort == "Audiobook Length: Longest First":

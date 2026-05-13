@@ -29,7 +29,8 @@ CREATE TABLE books (
     UniverseReadingOrder DECIMAL(5,2) NULL,
     LengthType NVARCHAR(50) NULL,
     Demographic NVARCHAR(50) NULL,
-    Full_Cast BIT NULL,
+    DateAdded DATETIME2 NOT NULL
+        CONSTRAINT DF_books_DateAdded DEFAULT SYSDATETIME(),
     Notes NVARCHAR(MAX) NULL,
 
     FOREIGN KEY (SeriesID) REFERENCES series(SeriesID)

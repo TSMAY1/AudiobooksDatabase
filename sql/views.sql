@@ -58,7 +58,7 @@ SELECT
     b.UniverseReadingOrder,
     b.LengthType,
     b.Demographic,
-    b.Full_Cast,
+    b.DateAdded,
     b.Notes
 FROM books b
 JOIN book_authors ba
@@ -79,9 +79,46 @@ GROUP BY
     b.UniverseReadingOrder,
     b.LengthType,
     b.Demographic,
-    b.Full_Cast,
+    b.DateAdded,
     b.Notes;
 GO
+
+-- book editing view
+
+CREATE OR ALTER VIEW vw_book_edit_details AS
+SELECT
+    b.BookID,
+    b.Title,
+    STRING_AGG(a.AuthorName, ', ') WITHIN GROUP (ORDER BY ba.AuthorOrder, a.AuthorName) AS Authors,
+    s.SeriesID,
+    s.SeriesName,
+    p.SeriesName AS ParentSeriesName,
+    COALESCE(p.SeriesName, s.SeriesName) AS UniverseName,
+    b.BookNumber,
+    b.UniverseReadingOrder,
+    b.LengthType,
+    b.Demographic,
+    b.Notes
+FROM books b
+JOIN book_authors ba
+    ON ba.BookID = b.BookID
+JOIN authors_new a
+    ON a.AuthorID = ba.AuthorID
+JOIN series s
+    ON s.SeriesID = b.SeriesID
+LEFT JOIN series p
+    ON p.SeriesID = s.ParentSeriesID
+GROUP BY
+    b.BookID,
+    b.Title,
+    s.SeriesID,
+    s.SeriesName,
+    p.SeriesName,
+    b.BookNumber,
+    b.UniverseReadingOrder,
+    b.LengthType,
+    b.Demographic,
+    b.Notes;
 
 -- Reader activity view
 
@@ -455,3 +492,4 @@ JOIN readers r
 JOIN books b
     ON b.BookID = rbc.BookID;
 GO
+
