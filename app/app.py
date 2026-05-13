@@ -1,53 +1,43 @@
 import streamlit as st
 import pandas as pd
-
-from db import run_query, load_cover_image_bytes
+from db import (
+    run_query,
+    load_cover_image_bytes,
+    format_book_number,
+    format_duration,
+    format_series,
+    detail_link,
+)
 
 
 st.set_page_config(page_title="Audiobooks Dashboard", layout="wide")
 
 st.title("🎧 Audiobooks Dashboard")
 st.caption("A cozy home base for your library, readers, recommendations, and book club tools.")
+st.markdown("""
+<style>
+.book-title-link,
+.book-title-link:visited,
+.book-title-link:active {
+    color: inherit !important;
+    text-decoration: none !important;
+    font-weight: 700;
+}
+
+.book-title-link:hover {
+    color: inherit !important;
+    text-decoration: underline !important;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 4px;
+    opacity: 0.9;
+}
+</style>
+""", unsafe_allow_html=True)
 
 
 # =========================================================
 # Helpers
 # =========================================================
-def format_book_number(num):
-    if pd.isna(num):
-        return ""
-
-    try:
-        num = float(num)
-        if num.is_integer():
-            return str(int(num))
-        return f"{num:.1f}".rstrip("0").rstrip(".")
-    except Exception:
-        return str(num)
-
-
-def format_duration(minutes):
-    if pd.isna(minutes):
-        return ""
-
-    try:
-        minutes = int(minutes)
-        hours = minutes // 60
-        mins = minutes % 60
-        return f"{hours}h {mins:02d}m"
-    except Exception:
-        return ""
-
-
-def format_series(series, num):
-    if pd.notna(series) and series:
-        formatted_num = format_book_number(num)
-        return f"{series} #{formatted_num}" if formatted_num else str(series)
-    return "Standalone"
-
-
-def detail_link(book_id):
-    return f"/Book_Details?book_id={int(book_id)}"
 
 
 def render_small_book_card(row):
@@ -64,7 +54,16 @@ def render_small_book_card(row):
                 st.caption("No cover")
 
         with col2:
-            st.markdown(f"**{row['Title']}**")
+            st.markdown(
+                f"""
+                <a href="{detail_link(row['BookID'])}" 
+                target="_blank" 
+                class="book-title-link">
+                    {row['Title']}
+                </a>
+                """,
+                unsafe_allow_html=True,
+            )
             st.caption(row["Authors"])
 
             if "SeriesName" in row:
@@ -75,21 +74,6 @@ def render_small_book_card(row):
 
             if "DateAdded" in row and pd.notna(row["DateAdded"]):
                 st.caption(f"Added: {pd.to_datetime(row['DateAdded']).strftime('%b %d, %Y')}")
-
-            html = f"""
-                <a href="{detail_link(row['BookID'])}" target="_blank"
-                style="
-                    text-decoration:none;
-                    color:rgba(156,163,175,0.9);
-                    font-size:0.82rem;
-                    display:inline-block;
-                    margin-top:0.35rem;
-                ">
-                    ↗ Open details
-                </a>
-                """
-            
-            st.markdown(html, unsafe_allow_html=True)
 
 
 # =========================================================
@@ -331,22 +315,6 @@ else:
                                 st.caption(
                                     f"📚 {format_series(book_row['SeriesName'], book_row.get('BookNumber'))}"
                                 )
-
-                            st.markdown(
-                                f"""
-                                <a href="{detail_link(book_row['BookID'])}" target="_blank"
-                                style="
-                                    text-decoration:none;
-                                    color:rgba(156,163,175,0.9);
-                                    font-size:0.82rem;
-                                    display:inline-block;
-                                    margin-top:0.2rem;
-                                ">
-                                    ↗ Open details
-                                </a>
-                                """,
-                                unsafe_allow_html=True
-                            )
 
 
 # =========================================================

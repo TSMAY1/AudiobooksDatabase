@@ -1,7 +1,12 @@
 import streamlit as st
 import pandas as pd
-
-from db import run_query, load_cover_image_bytes, execute_non_query
+from db import (
+    run_query,
+    load_cover_image_bytes,
+    execute_non_query,
+    format_book_number,
+    detail_link,
+)
 
 
 st.set_page_config(page_title="Recommendations", layout="wide")
@@ -10,43 +15,25 @@ st.title("📚 Book Recommendations")
 
 st.markdown("""
 <style>
-div.stButton > button {
-    width: 100%;
-    border-radius: 0.5rem;
-    min-height: 38.4px;
-    padding: 0.25rem 0.75rem;
-    background-color: rgba(75,85,99,0.9);
-    border: 1px solid rgba(156,163,175,0.35);
-    color: white;
-    font-size: 1rem;
-    font-weight: 400;
-    line-height: 1.6;
+.book-title-link,
+.book-title-link:visited,
+.book-title-link:active {
+    color: inherit !important;
+    text-decoration: none !important;
+    font-weight: 700;
 }
 
-div.stButton > button:hover {
-    background-color: rgba(107,114,128,0.95);
-    border: 1px solid rgba(209,213,219,0.45);
-    color: white;
-}
-
-div.stButton > button:disabled {
-    background-color: rgba(75,85,99,0.35);
-    border: 1px solid rgba(156,163,175,0.2);
-    color: rgba(255,255,255,0.55);
+.book-title-link:hover {
+    color: inherit !important;
+    text-decoration: underline !important;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 4px;
+    opacity: 0.9;
 }
 </style>
 """, unsafe_allow_html=True)
 
 st.caption("Pick a reader and a book they liked, then find similar unread books.")
-
-
-def format_book_number(value):
-    if pd.isna(value):
-        return ""
-    value = float(value)
-    if value.is_integer():
-        return str(int(value))
-    return str(value)
 
 def add_to_tbr(reader_id, book_id):
     execute_non_query("""
@@ -403,7 +390,19 @@ for _, row in recommendations.iterrows():
                 else:
                     title_line += f" — {row['SeriesName']}"
 
-            st.markdown(f"### {title_line}")
+            st.markdown(
+                f"""
+                <h3 style="margin-bottom:0.25rem;">
+                    <a href="{detail_link(row['BookID'])}" 
+                    target="_blank" 
+                    class="book-title-link">
+                        {title_line}
+                    </a>
+                </h3>
+                """,
+                unsafe_allow_html=True,
+            )
+            
             st.caption(row["Authors"])
 
             meta_bits = []
@@ -435,7 +434,7 @@ for _, row in recommendations.iterrows():
                 )
                 st.markdown(tag_html, unsafe_allow_html=True)
             
-            action_col1, action_col2, action_col3 = st.columns([1, 1, 2])
+            action_col1, action_col2 = st.columns([1, 3])
 
             button_style = """
                 width:100%;
@@ -490,21 +489,6 @@ for _, row in recommendations.iterrows():
                         st.rerun()
 
             with action_col2:
-                book_id = int(row["BookID"])
-                details_url = f"/Book_Details?book_id={book_id}"
-
-                st.markdown(
-                    f"""
-                    <a href="{details_url}" target="_blank" style="text-decoration:none;">
-                        <div style="{button_style}">
-                            Open details
-                        </div>
-                    </a>
-                    """,
-                    unsafe_allow_html=True
-                )
-
-            with action_col3:
                 st.markdown(
                     f"""
                     <div style="

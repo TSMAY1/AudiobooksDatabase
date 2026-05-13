@@ -1,9 +1,34 @@
 import streamlit as st
 import pandas as pd
-from db import run_query, load_cover_image_bytes
+from db import (
+    run_query,
+    load_cover_image_bytes,
+    format_book_number,
+    format_duration,
+    format_series,
+    detail_link,
+)
 
 st.title("📚 Library")
+st.markdown("""
+<style>
+.book-title-link,
+.book-title-link:visited,
+.book-title-link:active {
+    color: inherit !important;
+    text-decoration: none !important;
+    font-weight: 700;
+}
 
+.book-title-link:hover {
+    color: inherit !important;
+    text-decoration: underline !important;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 4px;
+    opacity: 0.9;
+}
+</style>
+""", unsafe_allow_html=True)
 
 # =========================================================
 # Cached loaders
@@ -171,37 +196,6 @@ def clear_library_caches():
 # =========================================================
 # Helpers
 # =========================================================
-def format_book_number(num):
-    if pd.isna(num):
-        return ""
-
-    try:
-        num = float(num)
-        if num.is_integer():
-            return str(int(num))
-        return f"{num:.1f}".rstrip("0").rstrip(".")
-    except Exception:
-        return str(num)
-
-
-def format_duration(minutes):
-    if pd.isna(minutes):
-        return ""
-
-    try:
-        minutes = int(minutes)
-        hours = minutes // 60
-        mins = minutes % 60
-        return f"{hours}h {mins:02d}m"
-    except Exception:
-        return ""
-
-
-def format_series(series, num):
-    if pd.notna(series):
-        formatted_num = format_book_number(num)
-        return f"{series} #{formatted_num}" if formatted_num else str(series)
-    return "Standalone"
 
 
 def clean(val):
@@ -252,17 +246,24 @@ def render_card(row):
             st.caption("No cover")
 
         series_line = format_series(row["SeriesName"], row["BookNumber"])
+        details_url = detail_link(row["BookID"])
 
         st.markdown(
             f"""
             <div style="padding:6px 2px 2px 2px;">
-                <div style="font-weight:600; line-height:1.2;">
-                    {row['Title']}
+                <div style="font-weight:700; line-height:1.25;">
+                    <a href="{details_url}" 
+                    target="_blank" 
+                    class="book-title-link">
+                        {row['Title']}
+                    </a>
                 </div>
-                <div style="font-size:0.8rem; opacity:0.85;">
+
+                <div style="font-size:0.8rem; opacity:0.85; margin-top:0.35rem;">
                     {row['Authors']}
                 </div>
-                <div style="font-size:0.72rem; opacity:0.65;">
+
+                <div style="font-size:0.72rem; opacity:0.65; margin-top:0.35rem;">
                     📚 {series_line}
                 </div>
             </div>
@@ -284,27 +285,6 @@ def render_card(row):
 
         book_id = int(row["BookID"])
         details_url = f"/Book_Details?book_id={book_id}"
-
-        html = f"""
-<a href="{details_url}" target="_blank" style="text-decoration:none;">
-<div style="
-    width:100%;
-    box-sizing:border-box;
-    padding:0.45rem 0.6rem;
-    border-radius:0.5rem;
-    background-color:rgba(75,85,99,0.9);
-    color:white;
-    text-align:center;
-    font-size:0.85rem;
-    line-height:1.2;
-    margin:0.75rem 0 0.5rem 0;;
-">
-Open details
-</div>
-</a>
-""".strip()
-
-        st.markdown(html, unsafe_allow_html=True)
 
 
 # =========================================================

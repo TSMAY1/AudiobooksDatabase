@@ -385,3 +385,39 @@ def load_cover_image_bytes(image_file_path: str) -> bytes:
         raise FileNotFoundError(f"Cover image not found: {absolute_file_path}")
 
     return absolute_file_path.read_bytes()
+
+def format_book_number(num):
+    if pd.isna(num):
+        return ""
+
+    try:
+        num = float(num)
+        if num.is_integer():
+            return str(int(num))
+        return f"{num:.1f}".rstrip("0").rstrip(".")
+    except Exception:
+        return str(num)
+
+
+def format_duration(minutes):
+    if pd.isna(minutes):
+        return ""
+
+    try:
+        minutes = int(minutes)
+        hours = minutes // 60
+        mins = minutes % 60
+        return f"{hours}h {mins:02d}m"
+    except Exception:
+        return ""
+
+
+def format_series(series, num):
+    if pd.notna(series) and series:
+        formatted_num = format_book_number(num)
+        return f"{series} #{formatted_num}" if formatted_num else str(series)
+    return "Standalone"
+
+
+def detail_link(book_id):
+    return f"/Book_Details?book_id={int(book_id)}"
