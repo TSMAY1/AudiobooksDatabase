@@ -8,6 +8,8 @@ from db import (
     execute_procedure,
     get_book_covers,
     load_cover_image_bytes,
+    format_book_number,
+    detail_link,
 )
 
 st.set_page_config(page_title="Reader Dashboard", page_icon="👤", layout="wide")
@@ -16,6 +18,26 @@ st.title("👤 Reader Dashboard")
 st.markdown(
     "Browse a reader’s library by status, manage reading progress, review mini book workflow, and view reader-specific stats."
 )
+
+st.markdown("""
+<style>
+.book-title-link,
+.book-title-link:visited,
+.book-title-link:active {
+    color: inherit !important;
+    text-decoration: none !important;
+    font-weight: 700;
+}
+
+.book-title-link:hover {
+    color: inherit !important;
+    text-decoration: underline !important;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 4px;
+    opacity: 0.9;
+}
+</style>
+""", unsafe_allow_html=True)
 
 
 # =========================================================
@@ -348,20 +370,6 @@ def clear_page_caches():
     load_all_books_for_reader.clear()
     load_primary_cover_paths.clear()
 
-
-def format_book_number(value):
-    if value is None or pd.isna(value):
-        return None
-
-    try:
-        number = float(value)
-        if number.is_integer():
-            return str(int(number))
-        return str(number).rstrip("0").rstrip(".")
-    except Exception:
-        return str(value)
-
-
 def yes_no(value):
     if pd.isna(value):
         return "No"
@@ -534,7 +542,17 @@ def render_book_card(
                 unsafe_allow_html=True,
             )
 
-        st.markdown(f"**{title}**")
+        st.markdown(
+            f"""
+            <a href="{detail_link(book_id)}"
+            target="_blank"
+            class="book-title-link">
+                {title}
+            </a>
+            """,
+            unsafe_allow_html=True,
+        )
+
         st.caption(authors)
 
         if series_name:
@@ -708,7 +726,20 @@ def render_overview_book_card(
                 unsafe_allow_html=True,
             )
 
-        st.markdown(f"**{title}**")
+        if book_id is not None:
+            st.markdown(
+                f"""
+                <a href="{detail_link(book_id)}"
+                target="_blank"
+                class="book-title-link">
+                    {title}
+                </a>
+                """,
+                unsafe_allow_html=True,
+            )
+        else:
+            st.markdown(f"**{title}**")
+
         st.caption(authors)
 
         if pd.notna(series_name):
@@ -995,7 +1026,18 @@ with overview_col1:
                     st.caption("No cover available")
 
             with card_col2:
-                st.markdown(f"### {row['Title']}")
+                st.markdown(
+                    f"""
+                    <h3 style="margin-bottom:0.25rem;">
+                        <a href="{detail_link(row['BookID'])}"
+                        target="_blank"
+                        class="book-title-link">
+                            {row['Title']}
+                        </a>
+                    </h3>
+                    """,
+                    unsafe_allow_html=True,
+                )
                 formatted_number = format_book_number(row["BookNumber"])
 
                 series_part = None
@@ -1080,7 +1122,18 @@ with overview_col2:
                     st.caption("No cover available")
 
             with card_col2:
-                st.markdown(f"### {favorite['Title']}")
+                st.markdown(
+                    f"""
+                    <h3 style="margin-bottom:0.25rem;">
+                        <a href="{detail_link(favorite['BookID'])}"
+                        target="_blank"
+                        class="book-title-link">
+                            {favorite['Title']}
+                        </a>
+                    </h3>
+                    """,
+                    unsafe_allow_html=True,
+                )
                 st.caption(favorite["Authors"])
 
                 formatted_number = format_book_number(favorite["BookNumber"])

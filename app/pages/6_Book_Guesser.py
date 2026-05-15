@@ -1,11 +1,35 @@
 import streamlit as st
 import pandas as pd
-from db import run_query, load_cover_image_bytes
+from db import (
+    run_query,
+    load_cover_image_bytes,
+    format_book_number,
+    detail_link,
+)
 
 st.set_page_config(page_title="Book Guesser", page_icon="❓")
 
 st.title("❓ Book Guesser")
 st.caption("Pick a category & generate your secret book!")
+st.markdown("""
+<style>
+.book-title-link,
+.book-title-link:visited,
+.book-title-link:active {
+    color: inherit !important;
+    text-decoration: none !important;
+    font-weight: 700;
+}
+
+.book-title-link:hover {
+    color: inherit !important;
+    text-decoration: underline !important;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 4px;
+    opacity: 0.9;
+}
+</style>
+""", unsafe_allow_html=True)
 
 
 # =========================================================
@@ -139,18 +163,6 @@ def load_random_book_pool(category: str):
 # =========================================================
 # Helpers
 # =========================================================
-def format_book_number(num):
-    if pd.isna(num):
-        return ""
-
-    try:
-        num = float(num)
-        if num.is_integer():
-            return str(int(num))
-        return f"{num:.1f}".rstrip("0").rstrip(".")
-    except Exception:
-        return str(num)
-
 
 def clean(value):
     if pd.isna(value) or value is None:
@@ -283,7 +295,18 @@ with left_col:
 
 with right_col:
     with st.container(border=True):
-        st.markdown(f"## {book['Title']}")
+        st.markdown(
+            f"""
+            <h2 style="margin-bottom:0.25rem;">
+                <a href="{detail_link(book['BookID'])}"
+                target="_blank"
+                class="book-title-link">
+                    {book['Title']}
+                </a>
+            </h2>
+            """,
+            unsafe_allow_html=True,
+        )
         st.caption(book["Authors"])
 
         st.markdown("### Core Details")

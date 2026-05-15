@@ -1,6 +1,6 @@
 import re
 import streamlit as st
-from db import run_query, load_cover_image_bytes
+from db import run_query, load_cover_image_bytes, detail_link
 
 st.set_page_config(page_title="Guessing Game", page_icon="🎯")
 
@@ -275,6 +275,25 @@ def process_full_title_guess(raw_guess: str):
 # Page UI
 # ----------------------------
 st.title("🎯 Audiobook Hangman")
+st.markdown("""
+<style>
+.book-title-link,
+.book-title-link:visited,
+.book-title-link:active {
+    color: inherit !important;
+    text-decoration: none !important;
+    font-weight: 700;
+}
+
+.book-title-link:hover {
+    color: inherit !important;
+    text-decoration: underline !important;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 4px;
+    opacity: 0.9;
+}
+</style>
+""", unsafe_allow_html=True)
 
 books_df = get_hangman_books()
 
@@ -500,7 +519,18 @@ else:
             st.caption("No cover")
 
     with answer_col2:
-        st.write(f"**{st.session_state.secret_title}**")
+        st.markdown(
+            f"""
+            <h3 style="margin-bottom:0.25rem;">
+                <a href="{detail_link(st.session_state.secret_book_id)}"
+                target="_blank"
+                class="book-title-link">
+                    {st.session_state.secret_title}
+                </a>
+            </h3>
+            """,
+            unsafe_allow_html=True,
+        )
 
         meta_parts = []
         if st.session_state.secret_authors:

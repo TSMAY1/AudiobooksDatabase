@@ -31,7 +31,7 @@ def load_book_detail(book_id: int, cache_buster: int = 0):
         vd.UniverseReadingOrder,
         vd.LengthType,
         vd.Demographic,
-        vd.Notes,
+        vd.Description,
         STRING_AGG(
             CASE WHEN bg.GenreType = 'Main' THEN g.GenreName END,
             ', '
@@ -60,7 +60,7 @@ def load_book_detail(book_id: int, cache_buster: int = 0):
         vd.UniverseReadingOrder,
         vd.LengthType,
         vd.Demographic,
-        vd.Notes,
+        vd.Description,
         pc.ImageFilePath;
     """
 
@@ -162,7 +162,7 @@ def load_book_for_edit(book_id: int, cache_buster: int = 0):
             UniverseReadingOrder,
             LengthType,
             Demographic,
-            Notes
+            Description
         FROM vw_book_edit_details
         WHERE BookID = ?;
     """, params=[book_id])
@@ -503,6 +503,14 @@ with overview_tab:
 
     with info_left:
         with st.container(border=True):
+            st.markdown("### Description")
+            if pd.notna(book.get("Description")) and str(book["Description"]).strip():
+                st.write(book["Description"])
+            else:
+                st.caption("No description recorded for this book.")
+
+    with info_right:
+        with st.container(border=True):
             st.markdown("### Reader Status")
 
             if reader_df.empty or reader_df["ReadingStatus"].dropna().empty:
@@ -514,14 +522,6 @@ with overview_tab:
                     with col:
                         if pd.notna(row.get("ReadingStatus")):
                             render_status_chip(row["ReaderName"], row["ReadingStatus"])
-
-        with info_right:
-            with st.container(border=True):
-                st.markdown("### Library Notes")
-                if pd.notna(book.get("Notes")) and str(book["Notes"]).strip():
-                    st.write(book["Notes"])
-                else:
-                    st.caption("No notes recorded for this book.")
     
     st.markdown("")
 
@@ -667,7 +667,7 @@ with edit_tab:
         current_universe_order = "" if pd.isna(edit_book["UniverseReadingOrder"]) else str(edit_book["UniverseReadingOrder"])
         current_length_type = "" if pd.isna(edit_book["LengthType"]) else str(edit_book["LengthType"])
         current_demographic = "" if pd.isna(edit_book["Demographic"]) else str(edit_book["Demographic"])
-        current_notes = "" if pd.isna(edit_book["Notes"]) else str(edit_book["Notes"])
+        current_description = "" if pd.isna(edit_book["Description"]) else str(edit_book["Description"])
 
         series_options_df = run_query("""
             SELECT SeriesName
@@ -760,9 +760,9 @@ with edit_tab:
                     value=current_demographic,
                 )
 
-            notes = st.text_area(
-                "Notes",
-                value=current_notes,
+            description = st.text_area(
+                "Description",
+                value=current_description,
                 height=140,
             )
 
@@ -791,7 +791,7 @@ with edit_tab:
                         universe_order,
                         length_type.strip() if length_type.strip() else None,
                         demographic.strip() if demographic.strip() else None,
-                        notes.strip() if notes.strip() else None,
+                        description.strip() if description.strip() else None,
                     ],
                 )
 

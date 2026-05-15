@@ -308,7 +308,17 @@ else:
                                 st.caption("No cover")
 
                         with info_col:
-                            st.markdown(f"**{book_row['Title']}**")
+                            st.markdown(
+                                f"""
+                                <a href="{detail_link(book_row['BookID'])}"
+                                target="_blank"
+                                class="book-title-link">
+                                    {book_row['Title']}
+                                </a>
+                                """,
+                                unsafe_allow_html=True,
+                            )
+
                             st.caption(book_row["Authors"])
 
                             if pd.notna(book_row.get("SeriesName")):

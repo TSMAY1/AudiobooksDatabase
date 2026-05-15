@@ -248,43 +248,38 @@ def render_card(row):
         series_line = format_series(row["SeriesName"], row["BookNumber"])
         details_url = detail_link(row["BookID"])
 
-        st.markdown(
-            f"""
-            <div style="padding:6px 2px 2px 2px;">
-                <div style="font-weight:700; line-height:1.25;">
-                    <a href="{details_url}" 
-                    target="_blank" 
-                    class="book-title-link">
-                        {row['Title']}
-                    </a>
-                </div>
-
-                <div style="font-size:0.8rem; opacity:0.85; margin-top:0.35rem;">
-                    {row['Authors']}
-                </div>
-
-                <div style="font-size:0.72rem; opacity:0.65; margin-top:0.35rem;">
-                    📚 {series_line}
-                </div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
+        meta_lines = []
 
         if pd.notna(row.get("DurationMinutes")):
-            st.caption(f"⏱️ {format_duration(row['DurationMinutes'])}")
-        
+            meta_lines.append(f"⏱️ {format_duration(row['DurationMinutes'])}")
+
         if pd.notna(row.get("ReleaseYear")):
-            st.caption(f"📅 {int(row['ReleaseYear'])}")
+            meta_lines.append(f"📅 {int(row['ReleaseYear'])}")
 
         if row.get("Publishers"):
-            st.caption(f"🏢 {row['Publishers']}")
+            meta_lines.append(f"🏢 {row['Publishers']}")
 
         if int(row.get("IsFullCast") or 0) == 1:
-            st.caption("🎭 Full cast")
+            meta_lines.append("🎭 Full cast")
 
-        book_id = int(row["BookID"])
-        details_url = f"/Book_Details?book_id={book_id}"
+        meta_html = "".join(
+            f"""
+            <div style="
+                font-size:0.72rem;
+                opacity:0.65;
+                margin-top:0.12rem;
+                line-height:1.2;
+            ">
+                {line}
+            </div>
+            """
+            for line in meta_lines
+        )
+
+        st.markdown("<div style='height:0.35rem;'></div>", unsafe_allow_html=True)
+
+
+
 
 
 # =========================================================

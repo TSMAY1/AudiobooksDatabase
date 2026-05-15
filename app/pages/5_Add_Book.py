@@ -77,7 +77,7 @@ st.divider()
 # =========================================================
 with st.form("add_book_form"):
     core_tab, genres_tab, cover_tab, audiobook_tab = st.tabs(
-        ["📚 Core Details", "🏷️ Genres & Notes", "🖼️ Cover", "🎧 Audiobook"]
+        ["📚 Core Details", "🏷️ Genres & Description", "🖼️ Cover", "🎧 Audiobook"]
     )
 
     with core_tab:
@@ -112,9 +112,9 @@ with st.form("add_book_form"):
             demographic = st.text_input("Demographic")
 
     with genres_tab:
-        st.markdown("### Genres & Notes")
+        st.markdown("### Genres & Description")
 
-        notes = st.text_area("Notes", height=140)
+        description = st.text_area("Description", height=140)
         main_genres = st.text_input("Main Genres (comma-separated)")
         secondary_genres = st.text_input("Secondary Genres (comma-separated)")
 
@@ -266,7 +266,7 @@ if submitted:
                 book_number,
                 length_type.strip() if length_type.strip() else None,
                 demographic.strip() if demographic.strip() else None,
-                notes.strip() if notes.strip() else None,
+                description.strip() if description.strip() else None,
                 main_genres.strip() if main_genres.strip() else None,
                 secondary_genres.strip() if secondary_genres.strip() else None,
             ],

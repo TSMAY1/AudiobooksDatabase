@@ -59,7 +59,7 @@ SELECT
     b.LengthType,
     b.Demographic,
     b.DateAdded,
-    b.Notes
+    b.Description
 FROM books b
 JOIN book_authors ba
     ON ba.BookID = b.BookID
@@ -80,7 +80,7 @@ GROUP BY
     b.LengthType,
     b.Demographic,
     b.DateAdded,
-    b.Notes;
+    b.Description;
 GO
 
 -- book editing view
@@ -98,7 +98,7 @@ SELECT
     b.UniverseReadingOrder,
     b.LengthType,
     b.Demographic,
-    b.Notes
+    b.Description
 FROM books b
 JOIN book_authors ba
     ON ba.BookID = b.BookID
@@ -118,7 +118,7 @@ GROUP BY
     b.UniverseReadingOrder,
     b.LengthType,
     b.Demographic,
-    b.Notes;
+    b.Description;
 
 -- Reader activity view
 

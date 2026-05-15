@@ -13,7 +13,7 @@ CREATE OR ALTER PROCEDURE AddBook
 	@BookNumber DECIMAL(4,1) = NULL,
 	@LengthType NVARCHAR(50) = NULL,
 	@Demographic NVARCHAR(50) = NULL,
-	@Notes NVARCHAR(MAX) = NULL,
+	@Description NVARCHAR(MAX) = NULL,
 	@MainGenres NVARCHAR(MAX) = NULL, -- e.g. 'Fantasy'
 	@SecondaryGenres NVARCHAR(MAX) = NULL -- e.g. 'Magic, Politics'
 AS
@@ -70,7 +70,7 @@ BEGIN
 			BookNumber,
 			LengthType,
 			Demographic,
-			Notes
+			Description
 		)
 		VALUES (
 			LTRIM(RTRIM(@Title)),
@@ -78,7 +78,7 @@ BEGIN
 			@BookNumber,
 			@LengthType,
 			@Demographic,
-			@Notes
+			@Description
 		);
 
 		SET @BookID = SCOPE_IDENTITY();
@@ -551,7 +551,7 @@ CREATE OR ALTER PROCEDURE UpdateBookCoreDetails
     @UniverseReadingOrder DECIMAL(5,2) = NULL,
     @LengthType NVARCHAR(50) = NULL,
     @Demographic NVARCHAR(50) = NULL,
-    @Notes NVARCHAR(MAX) = NULL
+    @Description NVARCHAR(MAX) = NULL
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -619,7 +619,7 @@ BEGIN
             UniverseReadingOrder = @UniverseReadingOrder,
             LengthType = NULLIF(LTRIM(RTRIM(@LengthType)), ''),
             Demographic = NULLIF(LTRIM(RTRIM(@Demographic)), ''),
-            Notes = NULLIF(LTRIM(RTRIM(@Notes)), '')
+            Description = NULLIF(LTRIM(RTRIM(@Description)), '')
         WHERE BookID = @BookID;
 
         COMMIT TRANSACTION;
