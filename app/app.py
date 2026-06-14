@@ -232,7 +232,7 @@ with quick_cols2[3]:
     )
 
 
-quick_cols3 = st.columns(4)
+quick_cols3 = st.columns(5)
 
 with quick_cols3[0]:
     st.page_link(
@@ -256,6 +256,12 @@ with quick_cols3[3]:
     st.page_link(
         "pages/10_Cozy_Corner_Book_Club_Calendars.py",
         label="🗓️ Bookclub Calendars"
+    )
+
+with quick_cols3[4]:
+    st.page_link(
+        "pages/11_Upcoming_Releases.py",
+        label="📅 Upcoming Releases"
     )
 
 # =========================================================

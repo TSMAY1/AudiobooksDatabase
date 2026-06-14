@@ -493,3 +493,27 @@ JOIN books b
     ON b.BookID = rbc.BookID;
 GO
 
+
+CREATE OR ALTER VIEW vw_upcoming_releases AS
+SELECT
+    ur.ReleaseID,
+    ur.Title,
+    ur.Authors,
+    ur.SeriesID,
+    s.SeriesName,
+    p.SeriesName AS ParentSeriesName,
+    COALESCE(p.SeriesName, s.SeriesName) AS UniverseName,
+    ur.BookNumber,
+    ur.ExpectedReleaseDate,
+    ur.ReleaseDatePrecision,
+    ur.Publisher,
+    ur.Narrators,
+    ur.WatchStatus,
+    ur.DateAdded,
+    ur.LastChecked
+FROM upcoming_releases ur
+LEFT JOIN series s
+    ON s.SeriesID = ur.SeriesID
+LEFT JOIN series p
+    ON p.SeriesID = s.ParentSeriesID;
+GO

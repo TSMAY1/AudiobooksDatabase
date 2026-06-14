@@ -1168,7 +1168,7 @@ with tab_all:
         all_books_df,
         "all_books",
         selected_reader,
-        default_view="Cards",
+        default_view="Table",
         current_favorite_book_id=current_favorite_book_id,
         show_status_actions=False,
         show_add_to_tbr_button=True,

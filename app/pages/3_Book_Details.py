@@ -2,6 +2,11 @@ import streamlit as st
 import pandas as pd
 from db import run_query, load_cover_image_bytes, execute_procedure
 
+st.set_page_config(
+    page_title="Book Details",
+    layout="wide"
+)
+
 st.title("📖 Book Details")
 
 query_params = st.query_params
@@ -409,7 +414,7 @@ with header_left:
     if pd.notna(cover_path) and cover_path:
         try:
             image_bytes = load_cover_image_bytes(cover_path)
-            st.image(image_bytes, width=220)
+            st.image(image_bytes, width=300)
         except Exception:
             st.caption("Cover could not be loaded.")
     else:
@@ -523,73 +528,73 @@ with overview_tab:
                         if pd.notna(row.get("ReadingStatus")):
                             render_status_chip(row["ReaderName"], row["ReadingStatus"])
     
-    st.markdown("")
+        st.markdown("")
 
-    with st.container(border=True):
-        st.markdown("### 🎧 Audiobooks")
+        with st.container(border=True):
+            st.markdown("### 🎧 Audiobooks")
 
-        if audiobooks_df.empty:
-            st.caption("No audiobook versions added yet.")
-        else:
-            for _, row in audiobooks_df.iterrows():
-                edition_name = (
-                    row["EditionName"]
-                    if pd.notna(row.get("EditionName")) and str(row["EditionName"]).strip()
-                    else "Standard Audiobook"
-                )
+            if audiobooks_df.empty:
+                st.caption("No audiobook versions added yet.")
+            else:
+                for _, row in audiobooks_df.iterrows():
+                    edition_name = (
+                        row["EditionName"]
+                        if pd.notna(row.get("EditionName")) and str(row["EditionName"]).strip()
+                        else "Standard Audiobook"
+                    )
 
-                narrators = (
-                    row["Narrators"]
-                    if pd.notna(row.get("Narrators")) and str(row["Narrators"]).strip()
-                    else "No narrators recorded"
-                )
+                    narrators = (
+                        row["Narrators"]
+                        if pd.notna(row.get("Narrators")) and str(row["Narrators"]).strip()
+                        else "No narrators recorded"
+                    )
 
-                duration = (
-                    row["DurationDisplay"]
-                    if pd.notna(row.get("DurationDisplay")) and str(row["DurationDisplay"]).strip()
-                    else "Unknown length"
-                )
+                    duration = (
+                        row["DurationDisplay"]
+                        if pd.notna(row.get("DurationDisplay")) and str(row["DurationDisplay"]).strip()
+                        else "Unknown length"
+                    )
 
-                publisher = (
-                    row["Publisher"]
-                    if pd.notna(row.get("Publisher")) and str(row["Publisher"]).strip()
-                    else None
-                )
+                    publisher = (
+                        row["Publisher"]
+                        if pd.notna(row.get("Publisher")) and str(row["Publisher"]).strip()
+                        else None
+                    )
 
-                release_year = (
-                    str(int(row["ReleaseYear"]))
-                    if pd.notna(row.get("ReleaseYear"))
-                    else None
-                )
+                    release_year = (
+                        str(int(row["ReleaseYear"]))
+                        if pd.notna(row.get("ReleaseYear"))
+                        else None
+                    )
 
-                notes = (
-                    row["Notes"]
-                    if pd.notna(row.get("Notes")) and str(row["Notes"]).strip()
-                    else None
-                )
+                    notes = (
+                        row["Notes"]
+                        if pd.notna(row.get("Notes")) and str(row["Notes"]).strip()
+                        else None
+                    )
 
-                tags = []
-                if row.get("IsFullCast") in [True, 1]:
-                    tags.append("Full Cast")
-                if row.get("IsAbridged") in [True, 1]:
-                    tags.append("Abridged")
+                    tags = []
+                    if row.get("IsFullCast") in [True, 1]:
+                        tags.append("Full Cast")
+                    if row.get("IsAbridged") in [True, 1]:
+                        tags.append("Abridged")
 
-                with st.container(border=True):
-                    st.markdown(f"**{edition_name}**")
-                    st.markdown(f"**Narrator(s):** {narrators}")
-                    st.markdown(f"**Length:** {duration}")
+                    with st.container(border=True):
+                        st.markdown(f"**{edition_name}**")
+                        st.markdown(f"**Narrator(s):** {narrators}")
+                        st.markdown(f"**Length:** {duration}")
 
-                    if publisher:
-                        st.markdown(f"**Publisher:** {publisher}")
+                        if publisher:
+                            st.markdown(f"**Publisher:** {publisher}")
 
-                    if release_year:
-                        st.markdown(f"**Release Year:** {release_year}")
+                        if release_year:
+                            st.markdown(f"**Release Year:** {release_year}")
 
-                    if tags:
-                        st.caption(" • ".join(tags))
+                        if tags:
+                            st.caption(" • ".join(tags))
 
-                    if notes:
-                        st.markdown(f"**Notes:** {notes}")
+                        if notes:
+                            st.markdown(f"**Notes:** {notes}")
 
     st.markdown("")
 

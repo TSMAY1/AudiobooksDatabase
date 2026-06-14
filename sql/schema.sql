@@ -323,3 +323,36 @@ CREATE INDEX IX_audiobook_version_narrators_AudiobookVersionID_DisplayOrder
 ON audiobook_version_narrators (AudiobookVersionID, DisplayOrder, NarratorID);
 GO
 
+CREATE TABLE upcoming_releases (
+    ReleaseID INT IDENTITY(1,1) PRIMARY KEY,
+
+    Title NVARCHAR(255) NOT NULL,
+    Authors NVARCHAR(MAX) NULL,
+
+    SeriesID INT NULL,
+    BookNumber DECIMAL(4,1) NULL,
+
+    ExpectedReleaseDate DATE NULL,
+    ReleaseDatePrecision NVARCHAR(20) NOT NULL DEFAULT 'Exact'
+        CHECK (ReleaseDatePrecision IN ('Exact', 'Month', 'Year', 'Unknown')),
+
+    Publisher NVARCHAR(255) NULL,
+    Narrators NVARCHAR(MAX) NULL,
+
+    WatchStatus NVARCHAR(20) NOT NULL DEFAULT 'Watching'
+        CHECK (WatchStatus IN ('Watching', 'Released')),
+
+    DateAdded DATETIME2 NOT NULL DEFAULT SYSDATETIME(),
+    LastChecked DATETIME2 NULL,
+
+    FOREIGN KEY (SeriesID) REFERENCES series(SeriesID)
+);
+GO
+
+CREATE INDEX IX_upcoming_releases_Date
+ON upcoming_releases (ExpectedReleaseDate, WatchStatus);
+GO
+
+CREATE INDEX IX_upcoming_releases_Series
+ON upcoming_releases (SeriesID, BookNumber);
+GO

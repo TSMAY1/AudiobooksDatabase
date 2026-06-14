@@ -10,6 +10,10 @@ from db import (
 )
 
 st.title("📚 Library")
+st.set_page_config(
+    page_title="Book Details",
+    layout="wide"
+)
 st.markdown("""
 <style>
 .book-title-link,
@@ -278,8 +282,25 @@ def render_card(row):
 
         st.markdown("<div style='height:0.35rem;'></div>", unsafe_allow_html=True)
 
+        st.markdown(
+            f"""
+            <div style="line-height:1.2;">
+                <a class="book-title-link" href="{details_url}" target="_self">
+                    {row["Title"]}
+                </a>
+                <div style="font-size:0.78rem; opacity:0.75; margin-top:0.15rem;">
+                    {row["Authors"]}
+                </div>
+                <div style="font-size:0.75rem; opacity:0.65; margin-top:0.12rem;">
+                    {series_line}
+                </div>
+                {meta_html}
+            </div>
+            """,
+            unsafe_allow_html=True,
+            )
 
-
+        st.markdown("<div style='height:0.35rem;'></div>", unsafe_allow_html=True)
 
 
 # =========================================================
@@ -377,7 +398,7 @@ if selected_release_year != "All years":
 if full_cast_filter == "Full cast only":
     df = df[df["IsFullCast"].fillna(0).astype(int) == 1]
 
-elif full_cast_filter == "Single narrator / not full cast":
+elif full_cast_filter == "Traditional Audiobooks only":
     df = df[df["IsFullCast"].fillna(0).astype(int) == 0]
 
 

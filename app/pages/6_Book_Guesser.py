@@ -7,10 +7,11 @@ from db import (
     detail_link,
 )
 
-st.set_page_config(page_title="Book Guesser", page_icon="❓")
+st.set_page_config(page_title="Book Guesser", page_icon="❓", layout="wide")
 
 st.title("❓ Book Guesser")
 st.caption("Pick a category & generate your secret book!")
+
 st.markdown("""
 <style>
 .book-title-link,
@@ -18,15 +19,50 @@ st.markdown("""
 .book-title-link:active {
     color: inherit !important;
     text-decoration: none !important;
-    font-weight: 700;
+    font-weight: 800;
 }
 
 .book-title-link:hover {
-    color: inherit !important;
     text-decoration: underline !important;
     text-decoration-thickness: 1px;
-    text-underline-offset: 4px;
+    text-underline-offset: 5px;
     opacity: 0.9;
+}
+
+.meta-chip {
+    display: inline-block;
+    padding: 6px 12px;
+    border-radius: 999px;
+    background-color: rgba(148, 163, 184, 0.12);
+    border: 1px solid rgba(148, 163, 184, 0.25);
+    margin: 0 6px 8px 0;
+    font-size: 0.82rem;
+    font-weight: 600;
+}
+
+.status-chip {
+    display: inline-block;
+    padding: 5px 11px;
+    border-radius: 999px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    margin-right: 6px;
+    margin-bottom: 6px;
+}
+
+.small-muted {
+    opacity: 0.75;
+    font-size: 0.85rem;
+}
+
+.section-title {
+    font-size: 1.1rem;
+    font-weight: 800;
+    margin-bottom: 0.75rem;
+}
+
+.tight-line {
+    margin-bottom: 0.45rem;
 }
 </style>
 """, unsafe_allow_html=True)
@@ -60,7 +96,7 @@ def load_random_book_pool(category: str):
         WHERE AngelaStatus.ReadingStatus = 'Read'
         AND ToriStatus.ReadingStatus = 'Read'
         """
-    
+
     elif category == "Books neither reader has read":
         where_clause = """
         WHERE (
@@ -88,7 +124,7 @@ def load_random_book_pool(category: str):
         vd.UniverseReadingOrder,
         vd.LengthType,
         vd.Demographic,
-        vd.Notes,
+        vd.Description,
         pc.ImageFilePath AS CoverImagePath,
         AngelaStatus.ReadingStatus AS AngelaStatus,
         ToriStatus.ReadingStatus AS ToriStatus,
@@ -163,7 +199,6 @@ def load_random_book_pool(category: str):
 # =========================================================
 # Helpers
 # =========================================================
-
 def clean(value):
     if pd.isna(value) or value is None:
         return ""
@@ -174,14 +209,14 @@ def yes_no(value):
     return "Yes" if value in [True, 1] else "No"
 
 
-def render_meta(label, value, icon=None):
-    value = clean(value)
+def format_flag(value, true_label, false_label):
+    return true_label if value in [True, 1] else false_label
 
-    if not value:
-        return
 
-    prefix = f"{icon} " if icon else ""
-    st.markdown(f"**{prefix}{label}:** {value}")
+def render_chip(text):
+    text = clean(text)
+    if text:
+        st.markdown(f'<span class="meta-chip">{text}</span>', unsafe_allow_html=True)
 
 
 def render_status_chip(reader_name, status):
@@ -199,21 +234,26 @@ def render_status_chip(reader_name, status):
 
     st.markdown(
         f"""
-        <span style="
-            display:inline-block;
-            padding:4px 10px;
-            border-radius:999px;
+        <span class="status-chip" style="
             background-color:{color}22;
             color:{color};
-            font-size:0.75rem;
-            font-weight:600;
-            margin-right:6px;
-            margin-bottom:6px;
             border:1px solid {color}55;
         ">
             {reader_name}: {status}
         </span>
         """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_detail_line(label, value, icon=None):
+    value = clean(value)
+    if not value:
+        return
+
+    prefix = f"{icon} " if icon else ""
+    st.markdown(
+        f'<div class="tight-line"><strong>{prefix}{label}:</strong> {value}</div>',
         unsafe_allow_html=True,
     )
 
@@ -229,10 +269,10 @@ def choose_random_book(pool_df: pd.DataFrame):
 category = st.selectbox(
     "Choose a category",
     [
-    "Books only Angela has read",
-    "Books only Tori has read",
-    "Books both readers have read",
-    "Books neither reader has read",
+        "Books only Angela has read",
+        "Books only Tori has read",
+        "Books both readers have read",
+        "Books neither reader has read",
     ],
 )
 
@@ -276,93 +316,151 @@ book = selected_df.iloc[0]
 
 st.divider()
 
-left_col, right_col = st.columns([1, 2])
+left_col, right_col = st.columns([0.85, 2.15], gap="large")
 
+
+# =========================================================
+# Left column: cover + quick facts
+# =========================================================
 with left_col:
     cover_path = clean(book.get("CoverImagePath"))
 
     if cover_path:
         try:
-            st.image(load_cover_image_bytes(cover_path), width=260)
+            st.image(load_cover_image_bytes(cover_path), width=280)
         except Exception:
             st.caption("Cover could not be loaded.")
     else:
         st.caption("No cover available.")
 
-    st.markdown("### Reader Status")
-    render_status_chip("Angela", book.get("AngelaStatus"))
-    render_status_chip("Tori", book.get("ToriStatus"))
+    st.markdown("")
 
+    with st.container(border=True):
+        st.markdown('<div class="section-title">Quick Facts</div>', unsafe_allow_html=True)
+
+        render_detail_line("Length", book.get("DurationDisplay"), "⏱️")
+        render_detail_line("Release Year", book.get("ReleaseYear"), "📅")
+        render_detail_line("Publisher", book.get("Publisher"), "🏢")
+
+        if pd.notna(book.get("IsFullCast")):
+            render_detail_line(
+                "Cast",
+                format_flag(book.get("IsFullCast"), "Full cast", "Single narrator"),
+                "🎭",
+            )
+
+        if pd.notna(book.get("IsAbridged")):
+            render_detail_line("Abridged", yes_no(book.get("IsAbridged")), "✂️")
+
+
+# =========================================================
+# Right column: hero + details
+# =========================================================
 with right_col:
+    # -------------------------
+    # Hero section
+    # -------------------------
     with st.container(border=True):
         st.markdown(
             f"""
-            <h2 style="margin-bottom:0.25rem;">
+            <h1 style="margin-bottom:0.25rem;">
                 <a href="{detail_link(book['BookID'])}"
-                target="_blank"
-                class="book-title-link">
+                   target="_blank"
+                   class="book-title-link">
                     {book['Title']}
                 </a>
-            </h2>
+            </h1>
+            <div class="small-muted">{clean(book.get("Authors"))}</div>
             """,
             unsafe_allow_html=True,
         )
-        st.caption(book["Authors"])
 
-        st.markdown("### Core Details")
+        st.markdown("")
 
         series_name = clean(book.get("SeriesName"))
         book_number = format_book_number(book.get("BookNumber"))
+        parent_series = clean(book.get("ParentSeriesName"))
+        universe = clean(book.get("UniverseName"))
+        universe_order = format_book_number(book.get("UniverseReadingOrder"))
+        length_type = clean(book.get("LengthType"))
+        demographic = clean(book.get("Demographic"))
 
         if series_name:
-            if book_number:
-                render_meta("Series", f"{series_name} #{book_number}", "📚")
-            else:
-                render_meta("Series", series_name, "📚")
+            series_display = f"📚 {series_name} #{book_number}" if book_number else f"📚 {series_name}"
         else:
-            render_meta("Series", "Standalone", "📚")
+            series_display = "📚 Standalone"
 
-        render_meta("Parent Series", book.get("ParentSeriesName"), "🧭")
-        render_meta("Universe", book.get("UniverseName"), "🌌")
-        render_meta("Universe Reading Order", format_book_number(book.get("UniverseReadingOrder")), "🔢")
-        render_meta("Length Type", book.get("LengthType"), "⏱️")
-        render_meta("Demographic", book.get("Demographic"), "👥")
+        chips = [series_display]
 
-        render_meta("Full Cast Audiobook", yes_no(book.get("IsFullCast")), "🎭")
+        if parent_series:
+            chips.append(f"🧭 {parent_series}")
 
-    with st.container(border=True):
-        st.markdown("### Genres")
+        if universe:
+            chips.append(f"🌌 {universe}")
 
-        main_genres = clean(book.get("MainGenres"))
-        secondary_genres = clean(book.get("SecondaryGenres"))
+        if universe_order:
+            chips.append(f"🔢 Order {universe_order}")
 
-        if main_genres:
-            st.markdown(f"**Main:** {main_genres}")
-        else:
-            st.caption("No main genres recorded.")
+        if length_type:
+            chips.append(f"⏱️ {length_type}")
 
-        if secondary_genres:
-            st.markdown(f"**Secondary:** {secondary_genres}")
-        else:
-            st.caption("No secondary genres recorded.")
-
-    with st.container(border=True):
-        st.markdown("### Audiobook Details")
-
-        render_meta("Narrator(s)", book.get("Narrators"), "🎧")
-        render_meta("Publisher", book.get("Publisher"), "🏢")
-        render_meta("Release Year", book.get("ReleaseYear"), "📅")
-        render_meta("Length", book.get("DurationDisplay"), "⏱️")
+        if demographic:
+            chips.append(f"👥 {demographic}")
 
         if pd.notna(book.get("IsFullCast")):
-            render_meta("Audiobook Full Cast", yes_no(book.get("IsFullCast")), "🎭")
+            chips.append(
+                "🎭 Full cast"
+                if book.get("IsFullCast") in [True, 1]
+                else "🎧 Single narrator"
+            )
 
-        if pd.notna(book.get("IsAbridged")):
-            render_meta("Abridged", yes_no(book.get("IsAbridged")), "✂️")
+        st.markdown(
+            "".join([f'<span class="meta-chip">{chip}</span>' for chip in chips]),
+            unsafe_allow_html=True,
+        )
 
-    notes = clean(book.get("Notes"))
+    # -------------------------
+    # Genres + audiobook details
+    # -------------------------
+    detail_col1, detail_col2 = st.columns(2, gap="medium")
 
-    if notes:
+    with detail_col1:
         with st.container(border=True):
-            st.markdown("### Notes")
-            st.write(notes)
+            st.markdown('<div class="section-title">Genres</div>', unsafe_allow_html=True)
+
+            main_genres = clean(book.get("MainGenres"))
+            secondary_genres = clean(book.get("SecondaryGenres"))
+
+            if main_genres:
+                render_detail_line("Main", main_genres)
+            else:
+                st.caption("No main genres recorded.")
+
+            if secondary_genres:
+                render_detail_line("Secondary", secondary_genres)
+            else:
+                st.caption("No secondary genres recorded.")
+
+    with detail_col2:
+        with st.container(border=True):
+            st.markdown('<div class="section-title">Audiobook Details</div>', unsafe_allow_html=True)
+
+            render_detail_line("Narrator(s)", book.get("Narrators"), "🎧")
+            render_detail_line("Publisher", book.get("Publisher"), "🏢")
+            render_detail_line("Release Year", book.get("ReleaseYear"), "📅")
+            render_detail_line("Length", book.get("DurationDisplay"), "⏱️")
+
+            if pd.notna(book.get("IsFullCast")):
+                render_detail_line("Full Cast", yes_no(book.get("IsFullCast")), "🎭")
+
+            if pd.notna(book.get("IsAbridged")):
+                render_detail_line("Abridged", yes_no(book.get("IsAbridged")), "✂️")
+
+    # -------------------------
+    # Description
+    # -------------------------
+    description = clean(book.get("Description"))
+
+    if description:
+        with st.expander("📖 Description", expanded=False):
+            st.write(description)
