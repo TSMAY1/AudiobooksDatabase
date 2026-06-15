@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+from ui import configure_page
 from db import (
     run_query,
     load_cover_image_bytes,
@@ -8,9 +9,7 @@ from db import (
     detail_link,
 )
 
-
-st.set_page_config(page_title="Recommendations", layout="wide")
-
+configure_page("Recommendations", icon="📚")
 st.title("📚 Book Recommendations")
 
 st.markdown("""

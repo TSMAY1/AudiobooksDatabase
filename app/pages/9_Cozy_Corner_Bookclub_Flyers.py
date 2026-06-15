@@ -1,6 +1,8 @@
 import streamlit as st
 from db import run_query, get_pdf_page_count, render_pdf_page
+from ui import configure_page
 
+configure_page("Cozy Corner Book Club", icon="💌")
 st.title("💌 Cozy Corner Book Club")
 st.markdown("Browse monthly flyers and view the books selected for each month.")
 

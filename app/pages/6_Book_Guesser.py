@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+from ui import configure_page
 from db import (
     run_query,
     load_cover_image_bytes,
@@ -7,8 +8,7 @@ from db import (
     detail_link,
 )
 
-st.set_page_config(page_title="Book Guesser", page_icon="❓", layout="wide")
-
+configure_page("Book Guesser", icon="❓")
 st.title("❓ Book Guesser")
 st.caption("Pick a category & generate your secret book!")
 

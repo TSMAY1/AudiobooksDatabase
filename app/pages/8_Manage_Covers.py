@@ -2,8 +2,10 @@ import html
 import json
 import pandas as pd
 import streamlit as st
+from ui import configure_page
 import streamlit.components.v1 as components
 from db import (
+    bump_book_related_caches,
     run_query,
     get_book_covers,
     save_book_cover,
@@ -11,7 +13,7 @@ from db import (
     delete_cover,
     load_cover_image_bytes,
 )
-
+configure_page("Manage Covers", icon="🖼️")
 st.title("🖼️ Manage Covers")
 st.markdown("Upload, preview, and manage book cover images for each book.")
 
@@ -45,8 +47,7 @@ def clear_cover_caches():
     load_books_for_cover_manager.clear()
     get_book_covers.clear()
     load_cover_image_bytes.clear()
-    st.session_state["library_cache_buster"] = st.session_state.get("library_cache_buster", 0) + 1
-    st.session_state["book_details_cache_buster"] = st.session_state.get("book_details_cache_buster", 0) + 1
+    bump_book_related_caches()
 
 def render_copyable_row(label: str, display_value: str, copy_value: str, height: int = 36):
     """

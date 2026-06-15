@@ -1,7 +1,9 @@
 import pandas as pd
 import streamlit as st
-from db import run_query, execute_procedure
+from ui import configure_page
+from db import bump_book_related_caches, run_query, execute_procedure
 
+configure_page("Manage Audiobooks", icon="🎧")
 st.title("🎧 Manage Audiobooks")
 st.markdown("Add and review audiobook versions for each book.")
 
@@ -61,15 +63,7 @@ def clear_audiobook_caches():
     load_books_for_audiobook_manager.clear()
     load_book_audiobooks.clear()
 
-    st.session_state["book_details_cache_buster"] = (
-        st.session_state.get("book_details_cache_buster", 0) + 1
-    )
-    st.session_state["library_cache_buster"] = (
-        st.session_state.get("library_cache_buster", 0) + 1
-    )
-    st.session_state["manage_audiobooks_cache_buster"] = (
-        st.session_state.get("manage_audiobooks_cache_buster", 0) + 1
-    )
+    bump_book_related_caches()
 
 
 # =========================================================

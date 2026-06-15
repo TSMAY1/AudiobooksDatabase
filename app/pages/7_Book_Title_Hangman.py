@@ -1,8 +1,9 @@
 import re
 import streamlit as st
+from ui import configure_page
 from db import run_query, load_cover_image_bytes, detail_link
 
-st.set_page_config(page_title="Guessing Game", page_icon="🎯")
+configure_page("Book Title Hangman", icon="🎯")
 
 MAX_WRONG_GUESSES = 6
 AUTHOR_HINT_THRESHOLD = 2

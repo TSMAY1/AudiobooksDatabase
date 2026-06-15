@@ -1,12 +1,9 @@
 import streamlit as st
 import pandas as pd
-from db import run_query, load_cover_image_bytes, execute_procedure
+from ui import configure_page
+from db import bump_book_related_caches, run_query, load_cover_image_bytes, execute_procedure
 
-st.set_page_config(
-    page_title="Book Details",
-    layout="wide"
-)
-
+configure_page("Book Details", icon="📖")
 st.title("📖 Book Details")
 
 query_params = st.query_params
@@ -234,12 +231,7 @@ def clear_book_details_caches():
     load_book_comments.clear()
     load_series_parent_options.clear()
 
-    st.session_state["book_details_cache_buster"] = (
-        st.session_state.get("book_details_cache_buster", 0) + 1
-    )
-    st.session_state["library_cache_buster"] = (
-        st.session_state.get("library_cache_buster", 0) + 1
-    )
+    bump_book_related_caches()
 
 
 # =========================================================

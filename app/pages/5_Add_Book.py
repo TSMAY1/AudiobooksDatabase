@@ -1,10 +1,13 @@
 import streamlit as st
+from ui import configure_page
 from db import (
+    bump_book_related_caches,
     execute_procedure,
     execute_procedure_returning_id,
     save_book_cover,
 )
 
+configure_page("Add Book", icon="➕")
 st.title("➕ Add Book")
 st.caption("Add a new book, with optional cover and audiobook details.")
 
@@ -39,16 +42,7 @@ def handle_standalone_toggle():
             st.session_state.series_name_input = ""
 
 
-def bump_related_caches():
-    st.session_state["library_cache_buster"] = (
-        st.session_state.get("library_cache_buster", 0) + 1
-    )
-    st.session_state["book_details_cache_buster"] = (
-        st.session_state.get("book_details_cache_buster", 0) + 1
-    )
-    st.session_state["manage_audiobooks_cache_buster"] = (
-        st.session_state.get("manage_audiobooks_cache_buster", 0) + 1
-    )
+    bump_book_related_caches()
 
 
 # =========================================================
@@ -314,7 +308,7 @@ if submitted:
                 ],
             )
 
-        bump_related_caches()
+        bump_book_related_caches()
 
         st.session_state["last_added_book_id"] = int(new_book_id)
         st.session_state["last_added_book_title"] = final_title

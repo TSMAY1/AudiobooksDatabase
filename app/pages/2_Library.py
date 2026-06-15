@@ -1,6 +1,9 @@
 import streamlit as st
 import pandas as pd
+from ui import configure_page
+
 from db import (
+    bump_book_related_caches,
     run_query,
     load_cover_image_bytes,
     format_book_number,
@@ -8,12 +11,9 @@ from db import (
     format_series,
     detail_link,
 )
-
+configure_page("Library", icon="📚")
 st.title("📚 Library")
-st.set_page_config(
-    page_title="Book Details",
-    layout="wide"
-)
+
 st.markdown("""
 <style>
 .book-title-link,
@@ -192,9 +192,7 @@ def clear_library_caches():
     load_publishers.clear()
     load_release_years.clear()
 
-    st.session_state["library_cache_buster"] = (
-        st.session_state.get("library_cache_buster", 0) + 1
-    )
+    bump_book_related_caches()
 
 
 # =========================================================

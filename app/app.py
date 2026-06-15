@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+from ui import configure_page
 from db import (
     run_query,
     load_cover_image_bytes,
@@ -10,7 +11,7 @@ from db import (
 )
 
 
-st.set_page_config(page_title="Audiobooks Dashboard", layout="wide")
+configure_page("Audiobooks Dashboard", icon="🎧")
 
 st.title("🎧 Audiobooks Dashboard")
 st.caption("A cozy home base for your library, readers, recommendations, and book club tools.")

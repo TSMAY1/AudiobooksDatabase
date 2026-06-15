@@ -22,12 +22,6 @@ conn_str = (
 
 
 def get_connection():
-    conn_str = (
-        "DRIVER={ODBC Driver 17 for SQL Server};"
-        "SERVER=DESKTOP-ACE2DSF\\SQLEXPRESS;"
-        "DATABASE=Audiobooks;"
-        "Trusted_Connection=yes;"
-    )
     return pyodbc.connect(conn_str)
 
 
@@ -421,3 +415,17 @@ def format_series(series, num):
 
 def detail_link(book_id):
     return f"/Book_Details?book_id={int(book_id)}"
+
+
+def bump_cache_key(key: str):
+    st.session_state[key] = st.session_state.get(key, 0) + 1
+
+
+def bump_book_related_caches():
+    for key in [
+        "library_cache_buster",
+        "book_details_cache_buster",
+        "manage_audiobooks_cache_buster",
+        "upcoming_releases_cache_buster",
+    ]:
+        bump_cache_key(key)

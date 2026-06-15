@@ -1,8 +1,9 @@
 import streamlit as st
 import pandas as pd
-from db import run_query, execute_non_query, format_book_number
+from ui import configure_page
+from db import bump_book_related_caches, run_query, execute_non_query, format_book_number
 
-st.set_page_config(page_title="Upcoming Releases", page_icon="📅", layout="wide")
+configure_page("Upcoming Releases", icon="📅")
 
 st.title("📅 Upcoming Releases")
 st.caption("Track anticipated audiobook releases and mark them as released when they become available.")
@@ -11,11 +12,6 @@ st.caption("Track anticipated audiobook releases and mark them as released when 
 # =========================================================
 # Helpers
 # =========================================================
-def bump_cache():
-    st.session_state["upcoming_releases_cache_buster"] = (
-        st.session_state.get("upcoming_releases_cache_buster", 0) + 1
-    )
-
 
 def clean_text(value):
     if value is None:
@@ -69,7 +65,7 @@ def update_last_checked(release_id):
         """,
         [int(release_id)],
     )
-    bump_cache()
+    bump_book_related_caches()
     st.toast("Last checked updated.")
     st.rerun()
 
@@ -84,7 +80,7 @@ def mark_released(release_id):
         """,
         [int(release_id)],
     )
-    bump_cache()
+    bump_book_related_caches()
     st.toast("Marked as released.")
     st.rerun()
 
@@ -98,7 +94,7 @@ def move_back_to_watching(release_id):
         """,
         [int(release_id)],
     )
-    bump_cache()
+    bump_book_related_caches()
     st.toast("Moved back to Watching.")
     st.rerun()
 
@@ -350,7 +346,7 @@ with st.expander("➕ Add Upcoming Release", expanded=False):
                     clean_text(narrators),
                 ],
             )
-            bump_cache()
+            bump_book_related_caches()
             st.success(f"Added upcoming release: **{title.strip()}**")
             st.rerun()
         except Exception as e:

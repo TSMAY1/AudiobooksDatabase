@@ -1,7 +1,10 @@
 import streamlit as st
 from db import run_query
 import altair as alt
+from ui import configure_page
 
+
+configure_page("Fun Stats", icon="📊")
 st.title("📊 Analytics")
 
 def show_bar_chart(df, category_col, value_col, title):

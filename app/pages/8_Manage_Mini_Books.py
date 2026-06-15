@@ -1,8 +1,9 @@
 import streamlit as st
 import pandas as pd
+from ui import configure_page
 from db import run_query, execute_procedure
 
-st.set_page_config(page_title="Mini Books", layout="wide")
+configure_page("Mini Books", icon="🎨")
 
 st.title("🎨 Mini Books")
 st.markdown(

@@ -31,7 +31,7 @@ CREATE TABLE books (
     Demographic NVARCHAR(50) NULL,
     DateAdded DATETIME2 NOT NULL
         CONSTRAINT DF_books_DateAdded DEFAULT SYSDATETIME(),
-    Notes NVARCHAR(MAX) NULL,
+    Description NVARCHAR(MAX) NULL,
 
     FOREIGN KEY (SeriesID) REFERENCES series(SeriesID)
 );

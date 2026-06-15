@@ -1,6 +1,8 @@
 import streamlit as st
+from ui import configure_page
 from db import run_query, render_pdf_to_images
 
+configure_page("Book Club Calendars", icon="🗓️")
 st.title("🗓️ Book Club Calendars")
 st.markdown("View yearly Cozy Corner Book Club calendar PDFs.")
 
