@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import html
 from ui import configure_page
 
 from db import (
@@ -77,6 +78,16 @@ def load_release_years(cache_buster: int = 0):
     """)
     return df["ReleaseYear"].astype(int).tolist()
 
+
+@st.cache_data(show_spinner=False)
+def load_genres(cache_buster: int = 0):
+    df = run_query("""
+        SELECT GenreName
+        FROM genres
+        ORDER BY GenreName;
+    """)
+    return df["GenreName"].tolist()
+
 @st.cache_data(show_spinner=False)
 def load_library_data(cache_buster: int = 0):
     books_query = """
@@ -102,7 +113,9 @@ def load_library_data(cache_buster: int = 0):
         ) AS SecondaryGenres,
         ab.Narrators,
         ab.DurationMinutes,
-        pc.ImageFilePath AS CoverImagePath
+        pc.ImageFilePath AS CoverImagePath,
+        CASE WHEN pc.ImageFilePath IS NULL THEN 1 ELSE 0 END AS MissingCover,
+        CASE WHEN ab.BookID IS NULL THEN 1 ELSE 0 END AS MissingAudiobook
     FROM vw_book_details vd
     LEFT JOIN book_genres bg
         ON bg.BookID = vd.BookID
@@ -134,6 +147,7 @@ def load_library_data(cache_buster: int = 0):
         ab.Narrators,
         ab.DurationMinutes,
         ab.IsFullCast,
+        ab.BookID,
         ab.Publishers,
         ab.ReleaseYear,
         pc.ImageFilePath
@@ -160,11 +174,12 @@ def build_df(cache_buster: int = 0):
     narrator_names = load_narrators(cache_buster=cache_buster)
     publisher_names = load_publishers(cache_buster=cache_buster)
     release_years = load_release_years(cache_buster=cache_buster)
+    genre_names = load_genres(cache_buster=cache_buster)
 
     if reader_df.empty:
         df = books_df.copy()
         df["SortOrder"] = df["UniverseReadingOrder"].fillna(df["BookNumber"])
-        return df, reader_names, narrator_names, publisher_names, release_years
+        return df, reader_names, narrator_names, publisher_names, release_years, genre_names
 
     status = reader_df.pivot(index="BookID", columns="ReaderName", values="ReadingStatus")
     rating = reader_df.pivot(index="BookID", columns="ReaderName", values="Rating")
@@ -177,7 +192,7 @@ def build_df(cache_buster: int = 0):
 
     df["SortOrder"] = df["UniverseReadingOrder"].fillna(df["BookNumber"])
 
-    return df, reader_names, narrator_names, publisher_names, release_years
+    return df, reader_names, narrator_names, publisher_names, release_years, genre_names
 
 
 # =========================================================
@@ -191,6 +206,7 @@ def clear_library_caches():
     load_cover_image_bytes.clear()
     load_publishers.clear()
     load_release_years.clear()
+    load_genres.clear()
 
     bump_book_related_caches()
 
@@ -280,6 +296,12 @@ def render_card(row):
 
         st.markdown("<div style='height:0.35rem;'></div>", unsafe_allow_html=True)
 
+        chip_html = render_compact_chips(row)
+        if chip_html:
+            st.markdown(chip_html, unsafe_allow_html=True)
+
+        st.markdown("<div style='height:0.2rem;'></div>", unsafe_allow_html=True)
+
         st.markdown(
             f"""
             <div style="line-height:1.2;">
@@ -296,26 +318,181 @@ def render_card(row):
             </div>
             """,
             unsafe_allow_html=True,
-            )
+        )
 
         st.markdown("<div style='height:0.35rem;'></div>", unsafe_allow_html=True)
+
+
+def render_compact_chips(row):
+    chips = []
+
+    if int(row.get("IsFullCast") or 0) == 1:
+        chips.append(("Full Cast", "#7c3aed"))
+
+    if int(row.get("MissingCover") or 0) == 1:
+        chips.append(("No Cover", "#dc2626"))
+
+    if int(row.get("MissingAudiobook") or 0) == 1:
+        chips.append(("No Audio", "#d97706"))
+
+    if not chips:
+        return
+
+    chip_html = "".join(
+        f"""
+        <span style="
+            display:inline-block;
+            padding:2px 7px;
+            border-radius:999px;
+            background:{color}22;
+            color:{color};
+            font-size:0.68rem;
+            font-weight:600;
+            margin-left:4px;
+            margin-bottom:2px;
+            white-space:nowrap;
+        ">{label}</span>
+        """
+        for label, color in chips
+    )
+    return chip_html
+
+
+def render_list_item(row):
+    series_line = format_series(row["SeriesName"], row["BookNumber"])
+    duration = format_duration(row["DurationMinutes"]) if pd.notna(row.get("DurationMinutes")) else None
+    release_year = str(int(row["ReleaseYear"])) if pd.notna(row.get("ReleaseYear")) else None
+
+    meta_parts = [
+        part
+        for part in [
+            series_line,
+            release_year,
+            row.get("Narrators"),
+            duration,
+            row.get("Publishers"),
+        ]
+        if part and str(part).strip()
+    ]
+
+    title = html.escape(str(row["Title"]))
+    authors = html.escape(str(row["Authors"]))
+    meta = html.escape("  |  ".join(str(part) for part in meta_parts))
+    chips = render_compact_chips(row) or ""
+    details_url = detail_link(row["BookID"])
+
+    st.markdown(
+        f"""
+        <div style="
+            display:grid;
+            grid-template-columns:minmax(260px, 1.2fr) minmax(320px, 2fr) auto;
+            align-items:center;
+            gap:1rem;
+            min-height:46px;
+            padding:0.45rem 0.75rem;
+            margin-bottom:0.28rem;
+            border:1px solid rgba(148, 163, 184, 0.22);
+            border-radius:8px;
+            background:rgba(148, 163, 184, 0.035);
+        ">
+            <div style="min-width:0;">
+                <a class="book-title-link" href="{details_url}" target="_self">
+                    {title}
+                </a>
+                <div style="
+                    font-size:0.74rem;
+                    opacity:0.72;
+                    margin-top:0.08rem;
+                    overflow:hidden;
+                    text-overflow:ellipsis;
+                    white-space:nowrap;
+                ">{authors}</div>
+            </div>
+            <div style="
+                min-width:0;
+                font-size:0.75rem;
+                opacity:0.66;
+                overflow:hidden;
+                text-overflow:ellipsis;
+                white-space:nowrap;
+            ">{meta}</div>
+            <div style="
+                display:flex;
+                justify-content:flex-end;
+                align-items:center;
+                flex-wrap:wrap;
+                max-width:260px;
+            ">{chips}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 # =========================================================
 # Load page data
 # =========================================================
 cache_buster = st.session_state.get("library_cache_buster", 0)
-df, readers, narrators, publishers, release_years = build_df(cache_buster=cache_buster)
+df, readers, narrators, publishers, release_years, genres = build_df(cache_buster=cache_buster)
 
 
 # =========================================================
-# Controls
+# Command Center
 # =========================================================
-search = st.text_input("Search")
 
-col1, col2, col3 = st.columns([1, 1, 1])
+with st.container(border=True):
+    filter_col1, filter_col2, filter_col3, filter_col4 = st.columns([2, 1, 1, 1])
 
-with col1:
+    with filter_col1:
+        search_text = st.text_input("Search", placeholder="Title, author, series, genre, narrator")
+
+    with filter_col2:
+        selected_reader = st.selectbox("Reader", ["All Readers"] + readers)
+
+    with filter_col3:
+        selected_status = st.selectbox(
+            "Status",
+            ["Any", "Unread", "TBR", "Reading", "Read", "DNF"],
+        )
+
+    with filter_col4:
+        view_mode = st.radio(
+            "View",
+            ["Cards", "List", "Table"],
+            horizontal=True,
+        )
+
+    filter_col5, filter_col6, filter_col7, filter_col8 = st.columns(4)
+
+    with filter_col5:
+        selected_genre = st.selectbox("Genre", ["Any"] + genres)
+
+    with filter_col6:
+        selected_narrator = st.selectbox("Narrator", ["Any"] + narrators)
+
+    with filter_col7:
+        selected_publisher = st.selectbox("Publisher", ["Any"] + publishers)
+
+    with filter_col8:
+        selected_release_year = st.selectbox("Release Year", ["Any"] + release_years)
+
+    filter_col9, filter_col10, filter_col11, filter_col12 = st.columns(4)
+
+    with filter_col9:
+        full_cast_filter = st.selectbox(
+            "Full cast",
+            ["Any", "Full cast only", "Traditional only"],
+        )
+
+    with filter_col10:
+        missing_cover_only = st.checkbox("Only missing covers")
+
+    with filter_col11:
+        missing_audiobook_only = st.checkbox("Only missing audiobooks")
+
+    with filter_col12:
+        max_duration_hours = st.slider("Max hours", 0, 80, 80)
+
     sort = st.selectbox(
         "Sort by",
         [
@@ -330,75 +507,108 @@ with col1:
         index=2,
     )
 
-with col2:
-    view = st.selectbox("View", ["Cards", "Table"], index=0)
+    if st.button("Refresh Library", width="stretch"):
+        clear_library_caches()
+        st.rerun()
 
-with col3:
-    selected_narrator = st.selectbox(
-        "Narrator",
-        ["All narrators"] + narrators,
-    )
+active_filters = []
 
-filter_col1, filter_col2, filter_col3 = st.columns([1, 1, 1])
+if search_text:
+    active_filters.append(f"Search: {search_text}")
+if selected_reader != "All Readers":
+    active_filters.append(f"Reader: {selected_reader}")
+if selected_status != "Any":
+    active_filters.append(f"Status: {selected_status}")
+if selected_genre != "Any":
+    active_filters.append(f"Genre: {selected_genre}")
+if selected_narrator != "Any":
+    active_filters.append(f"Narrator: {selected_narrator}")
+if selected_publisher != "Any":
+    active_filters.append(f"Publisher: {selected_publisher}")
+if selected_release_year != "Any":
+    active_filters.append(f"Release Year: {selected_release_year}")
+if full_cast_filter != "Any":
+    active_filters.append(full_cast_filter)
+if missing_cover_only:
+    active_filters.append("Only missing covers")
+if missing_audiobook_only:
+    active_filters.append("Only missing audiobooks")
+if max_duration_hours < 80:
+    active_filters.append(f"Max {max_duration_hours}h")
 
-with filter_col1:
-    selected_publisher = st.selectbox(
-        "Publisher",
-        ["All publishers"] + publishers,
-    )
+if active_filters:
+    st.caption("Active filters: " + " | ".join(active_filters))
 
-with filter_col2:
-    selected_release_year = st.selectbox(
-        "Release year",
-        ["All years"] + release_years,
-    )
-
-with filter_col3:
-    full_cast_filter = st.selectbox(
-        "Full cast",
-        ["All", "Full cast only", "Traditional Audiobooks only"],
-    )
-
-if st.button("🔄 Refresh Library", width="stretch"):
-    clear_library_caches()
-    st.rerun()
-
-
+# =========================================================
 # =========================================================
 # Search and filters
 # =========================================================
-if search:
+if search_text:
     df = df[
-        df["Title"].str.contains(search, case=False, na=False)
-        | df["Authors"].str.contains(search, case=False, na=False)
-        | df["SeriesName"].fillna("").str.contains(search, case=False, na=False)
-        | df["UniverseName"].fillna("").str.contains(search, case=False, na=False)
-        | df["Narrators"].fillna("").str.contains(search, case=False, na=False)
+        df["Title"].str.contains(search_text, case=False, na=False)
+        | df["Authors"].str.contains(search_text, case=False, na=False)
+        | df["SeriesName"].fillna("").str.contains(search_text, case=False, na=False)
+        | df["UniverseName"].fillna("").str.contains(search_text, case=False, na=False)
+        | df["MainGenres"].fillna("").str.contains(search_text, case=False, na=False)
+        | df["SecondaryGenres"].fillna("").str.contains(search_text, case=False, na=False)
+        | df["Narrators"].fillna("").str.contains(search_text, case=False, na=False)
     ]
 
-if selected_narrator != "All narrators":
+if selected_reader != "All Readers" and selected_status != "Any":
+    status_col = f"{selected_reader} Status"
+    if status_col in df.columns:
+        df = df[df[status_col] == selected_status]
+
+elif selected_reader == "All Readers" and selected_status != "Any":
+    status_cols = [
+        f"{reader} Status"
+        for reader in readers
+        if f"{reader} Status" in df.columns
+    ]
+    if status_cols:
+        df = df[df[status_cols].eq(selected_status).any(axis=1)]
+
+if selected_genre != "Any":
+    df = df[
+        df["MainGenres"].fillna("").str.contains(selected_genre, case=False, regex=False)
+        | df["SecondaryGenres"].fillna("").str.contains(selected_genre, case=False, regex=False)
+    ]
+
+if selected_narrator != "Any":
     df = df[
         df["Narrators"]
         .fillna("")
         .str.contains(selected_narrator, case=False, regex=False)
     ]
 
-if selected_publisher != "All publishers":
+if selected_publisher != "Any":
     df = df[
         df["Publishers"]
         .fillna("")
         .str.contains(selected_publisher, case=False, regex=False)
     ]
 
-if selected_release_year != "All years":
+if selected_release_year != "Any":
     df = df[df["ReleaseYear"] == selected_release_year]
 
 if full_cast_filter == "Full cast only":
     df = df[df["IsFullCast"].fillna(0).astype(int) == 1]
 
-elif full_cast_filter == "Traditional Audiobooks only":
+elif full_cast_filter == "Traditional only":
     df = df[df["IsFullCast"].fillna(0).astype(int) == 0]
 
+if missing_cover_only:
+    df = df[df["MissingCover"].fillna(0).astype(int) == 1]
+
+if missing_audiobook_only:
+    df = df[df["MissingAudiobook"].fillna(0).astype(int) == 1]
+
+if max_duration_hours < 80:
+    max_duration_minutes = max_duration_hours * 60
+    df = df[
+        df["DurationMinutes"].isna()
+        | (df["DurationMinutes"] <= max_duration_minutes)
+    ]
 
 
 
@@ -460,7 +670,7 @@ st.caption(f"{len(df)} books")
 # =========================================================
 # View
 # =========================================================
-if view == "Table":
+if view_mode == "Table":
     display_df = df.copy()
 
     if "BookNumber" in display_df.columns:
@@ -474,6 +684,10 @@ if view == "Table":
         display_df = display_df.drop(columns=["DurationMinutes"], errors="ignore")
 
     st.dataframe(display_df, width="stretch", hide_index=True)
+
+elif view_mode == "List":
+    for _, row in df.iterrows():
+        render_list_item(row)
 
 else:
     cards_per_row = 7

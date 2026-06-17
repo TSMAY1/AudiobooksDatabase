@@ -761,21 +761,21 @@ def render_overview_book_card(
         if show_mark_read_action and book_id is not None and reader_name is not None:
             st.markdown("")
 
-            with st.form(f"finish_book_overview_form_{selected_reader}_{int(row['BookID'])}"):
+            with st.form(f"finish_book_overview_form_{reader_name}_{int(book_id)}"):
                 new_rating = st.slider(
                     "Rating",
                     min_value=0.0,
                     max_value=5.0,
                     value=4.0,
                     step=0.1,
-                    key=f"overview_rating_{selected_reader}_{int(row['BookID'])}",
+                    key=f"overview_rating_{reader_name}_{int(book_id)}",
                 )
 
                 comment_text = st.text_area(
                     "Optional comment",
                     placeholder="Add thoughts about this book...",
                     height=100,
-                    key=f"overview_comment_{selected_reader}_{int(row['BookID'])}",
+                    key=f"overview_comment_{reader_name}_{int(book_id)}",
                 )
 
                 action_col1, action_col2 = st.columns(2)
@@ -794,23 +794,113 @@ def render_overview_book_card(
 
             if submitted_read:
                 finish_current_book_from_overview(
-                    book_id=int(row["BookID"]),
-                    reader_name=selected_reader,
+                    book_id=int(book_id),
+                    reader_name=reader_name,
                     new_status="Read",
                     rating=new_rating,
                     comment_text=comment_text,
-                    title=row["Title"],
+                    title=title,
                 )
 
             if submitted_dnf:
                 finish_current_book_from_overview(
-                    book_id=int(row["BookID"]),
-                    reader_name=selected_reader,
+                    book_id=int(book_id),
+                    reader_name=reader_name,
                     new_status="DNF",
                     rating=new_rating,
                     comment_text=comment_text,
-                    title=row["Title"],
+                    title=title,
                 )
+
+
+def render_currently_reading_card(row, reader_name: str):
+    cover_bytes = load_primary_cover_bytes(int(row["BookID"]))
+
+    card_col1, card_col2 = st.columns([1, 1.7], gap="medium")
+
+    with card_col1:
+        if cover_bytes:
+            st.image(cover_bytes, width=210)
+        else:
+            st.caption("No cover available")
+
+    with card_col2:
+        st.markdown(
+            f"""
+            <h3 style="margin-bottom:0.25rem;">
+                <a href="{detail_link(row['BookID'])}"
+                target="_blank"
+                class="book-title-link">
+                    {row['Title']}
+                </a>
+            </h3>
+            """,
+            unsafe_allow_html=True,
+        )
+        formatted_number = format_book_number(row["BookNumber"])
+
+        series_part = None
+        if pd.notna(row["SeriesName"]) and row["SeriesName"]:
+            if formatted_number:
+                series_part = f"{row['SeriesName']} #{formatted_number}"
+            else:
+                series_part = row["SeriesName"]
+
+        if series_part:
+            st.caption(f"{row['Authors']} - {series_part}")
+        else:
+            st.caption(row["Authors"])
+
+        with st.form(f"finish_book_overview_form_{reader_name}_{int(row['BookID'])}"):
+            new_rating = st.slider(
+                "Rating",
+                min_value=0.0,
+                max_value=5.0,
+                value=4.0,
+                step=0.1,
+                key=f"overview_rating_{reader_name}_{int(row['BookID'])}",
+            )
+
+            comment_text = st.text_area(
+                "Optional comment",
+                placeholder="Add thoughts about this book...",
+                height=100,
+                key=f"overview_comment_{reader_name}_{int(row['BookID'])}",
+            )
+
+            action_col1, action_col2 = st.columns(2)
+
+            with action_col1:
+                submitted_read = st.form_submit_button(
+                    "✅",
+                    width='stretch',
+                )
+
+            with action_col2:
+                submitted_dnf = st.form_submit_button(
+                    "⛔",
+                    width='stretch',
+                )
+
+        if submitted_read:
+            finish_current_book_from_overview(
+                book_id=int(row["BookID"]),
+                reader_name=reader_name,
+                new_status="Read",
+                rating=new_rating,
+                comment_text=comment_text,
+                title=row["Title"],
+            )
+
+        if submitted_dnf:
+            finish_current_book_from_overview(
+                book_id=int(row["BookID"]),
+                reader_name=reader_name,
+                new_status="DNF",
+                rating=new_rating,
+                comment_text=comment_text,
+                title=row["Title"],
+            )
 
 def render_books_grid(
     df: pd.DataFrame,
@@ -1014,94 +1104,14 @@ with overview_col1:
                 na_position="last"
             )
 
-            row = currently_reading_df.iloc[0]
-            cover_bytes = load_primary_cover_bytes(int(row["BookID"]))
+            current_count = len(currently_reading_df)
+            st.caption(f"{current_count} book(s) currently marked as Reading.")
 
-            card_col1, card_col2 = st.columns([1, 1.7], gap="medium")
+            for index, (_, current_row) in enumerate(currently_reading_df.iterrows()):
+                if index > 0:
+                    st.divider()
 
-            with card_col1:
-                if cover_bytes:
-                    st.image(cover_bytes, width=210)
-                else:
-                    st.caption("No cover available")
-
-            with card_col2:
-                st.markdown(
-                    f"""
-                    <h3 style="margin-bottom:0.25rem;">
-                        <a href="{detail_link(row['BookID'])}"
-                        target="_blank"
-                        class="book-title-link">
-                            {row['Title']}
-                        </a>
-                    </h3>
-                    """,
-                    unsafe_allow_html=True,
-                )
-                formatted_number = format_book_number(row["BookNumber"])
-
-                series_part = None
-                if pd.notna(row["SeriesName"]) and row["SeriesName"]:
-                    if formatted_number:
-                        series_part = f"{row['SeriesName']} #{formatted_number}"
-                    else:
-                        series_part = row["SeriesName"]
-
-                if series_part:
-                    st.caption(f"{row['Authors']} • {series_part}")
-                else:
-                    st.caption(row["Authors"])
-
-                with st.form(f"finish_book_overview_form_{selected_reader}_{int(row['BookID'])}"):
-                    new_rating = st.slider(
-                        "Rating",
-                        min_value=0.0,
-                        max_value=5.0,
-                        value=4.0,
-                        step=0.1,
-                        key=f"overview_rating_{selected_reader}_{int(row['BookID'])}",
-                    )
-
-                    comment_text = st.text_area(
-                        "Optional comment",
-                        placeholder="Add thoughts about this book...",
-                        height=100,
-                        key=f"overview_comment_{selected_reader}_{int(row['BookID'])}",
-                    )
-
-                    action_col1, action_col2 = st.columns(2)
-
-                    with action_col1:
-                        submitted_read = st.form_submit_button(
-                            "✅",
-                            width='stretch',
-                        )
-
-                    with action_col2:
-                        submitted_dnf = st.form_submit_button(
-                            "⛔",
-                            width='stretch',
-                        )
-
-                if submitted_read:
-                    finish_current_book_from_overview(
-                        book_id=int(row["BookID"]),
-                        reader_name=selected_reader,
-                        new_status="Read",
-                        rating=new_rating,
-                        comment_text=comment_text,
-                        title=row["Title"],
-                    )
-
-                if submitted_dnf:
-                    finish_current_book_from_overview(
-                        book_id=int(row["BookID"]),
-                        reader_name=selected_reader,
-                        new_status="DNF",
-                        rating=new_rating,
-                        comment_text=comment_text,
-                        title=row["Title"],
-                    )
+                render_currently_reading_card(current_row, selected_reader)
 
 with overview_col2:
     with st.container(border=True):

@@ -1,7 +1,14 @@
 import streamlit as st
 import pandas as pd
 from ui import configure_page
-from db import bump_book_related_caches, run_query, load_cover_image_bytes, execute_procedure
+from db import (
+    bump_book_related_caches,
+    run_query,
+    load_cover_image_bytes,
+    execute_procedure,
+    format_book_number,
+    format_duration,
+)
 
 configure_page("Book Details", icon="📖")
 st.title("📖 Book Details")
@@ -204,6 +211,42 @@ def load_book_comments(book_id: int, cache_buster: int = 0):
         ORDER BY DateAdded DESC, CommentID DESC;
     """, params=[book_id])
 
+
+@st.cache_data(show_spinner=False)
+def load_series_books(series_name: str, cache_buster: int = 0):
+    return run_query("""
+        SELECT
+            bd.BookID,
+            bd.Title,
+            bd.Authors,
+            bd.SeriesName,
+            bd.BookNumber,
+            bd.UniverseReadingOrder,
+            pc.ImageFilePath AS CoverImagePath,
+            ab.DurationMinutes,
+            ab.ReleaseYear,
+            ab.IsFullCast
+        FROM vw_book_details bd
+        LEFT JOIN vw_book_primary_cover pc
+            ON pc.BookID = bd.BookID
+        LEFT JOIN (
+            SELECT
+                BookID,
+                MAX(DurationMinutes) AS DurationMinutes,
+                MAX(ReleaseYear) AS ReleaseYear,
+                MAX(CAST(IsFullCast AS INT)) AS IsFullCast
+            FROM vw_book_audiobooks
+            GROUP BY BookID
+        ) ab
+            ON ab.BookID = bd.BookID
+        WHERE bd.SeriesName = ?
+        ORDER BY
+            CASE WHEN bd.BookNumber IS NULL THEN 1 ELSE 0 END,
+            bd.BookNumber,
+            bd.Title;
+    """, params=[series_name])
+
+
 @st.cache_data(show_spinner=False)
 def load_series_parent_options(cache_buster: int = 0):
     return run_query("""
@@ -229,6 +272,7 @@ def clear_book_details_caches():
     load_cover_image_bytes.clear()
     load_book_audiobooks.clear()
     load_book_comments.clear()
+    load_series_books.clear()
     load_series_parent_options.clear()
 
     bump_book_related_caches()
@@ -346,6 +390,63 @@ def render_meta_row(label, value, icon=None):
 
     prefix = f"{icon} " if icon else ""
     st.markdown(f"**{prefix}{label}:** {value}")
+
+
+def render_series_book_card(row, current_book_id: int):
+    book_id = int(row["BookID"])
+    is_current = book_id == int(current_book_id)
+
+    with st.container(border=True):
+        cover_col, info_col = st.columns([0.7, 2.3], gap="medium")
+
+        with cover_col:
+            cover_path = row.get("CoverImagePath")
+            if pd.notna(cover_path) and cover_path:
+                try:
+                    st.image(load_cover_image_bytes(cover_path), width=95)
+                except Exception:
+                    st.caption("No cover")
+            else:
+                st.caption("No cover")
+
+        with info_col:
+            number = format_book_number(row.get("BookNumber"))
+            number_label = f"Book {number}" if number else "Series book"
+
+            if is_current:
+                st.markdown(f"**{number_label}: {row['Title']}**")
+                st.caption("Current book")
+            else:
+                st.markdown(f"**{number_label}: {row['Title']}**")
+
+            st.caption(row["Authors"])
+
+            meta_parts = []
+            if pd.notna(row.get("ReleaseYear")):
+                meta_parts.append(str(int(row["ReleaseYear"])))
+            if pd.notna(row.get("DurationMinutes")):
+                meta_parts.append(format_duration(row["DurationMinutes"]))
+            if int(row.get("IsFullCast") or 0) == 1:
+                meta_parts.append("Full Cast")
+
+            if meta_parts:
+                st.caption(" | ".join(meta_parts))
+
+            if is_current:
+                st.button(
+                    "Current",
+                    key=f"series_current_{book_id}",
+                    width='stretch',
+                    disabled=True,
+                )
+            else:
+                if st.button(
+                    "Open Details",
+                    key=f"series_open_{book_id}",
+                    width='stretch',
+                ):
+                    st.session_state["selected_book_id"] = book_id
+                    st.rerun()
 
 
 # =========================================================
@@ -491,9 +592,21 @@ st.divider()
 # =========================================================
 # Tabs
 # =========================================================
-overview_tab, edit_tab, reading_tab, genres_tab = st.tabs(
-    ["Overview", "Edit", "Reading", "Genres"]
+series_name = book.get("SeriesName")
+has_series_view = (
+    pd.notna(series_name)
+    and str(series_name).strip()
+    and str(series_name).strip().lower() != "standalone"
 )
+
+if has_series_view:
+    overview_tab, series_tab, edit_tab, reading_tab, genres_tab = st.tabs(
+        ["Overview", "Series", "Edit", "Reading", "Genres"]
+    )
+else:
+    overview_tab, edit_tab, reading_tab, genres_tab = st.tabs(
+        ["Overview", "Edit", "Reading", "Genres"]
+    )
 
 with overview_tab:
     info_left, info_right = st.columns(2)
@@ -645,6 +758,30 @@ with overview_tab:
                         use_container_width=True,
                     ):
                         delete_reader_book_comment(comment_id)
+
+if has_series_view:
+    with series_tab:
+        series_books_df = load_series_books(
+            str(series_name).strip(),
+            cache_buster=cache_buster,
+        )
+
+        with st.container(border=True):
+            st.markdown(f"### Series View: {series_name}")
+
+            if series_books_df.empty:
+                st.caption("No other books found in this series.")
+            else:
+                st.caption(f"{len(series_books_df)} book(s) in this series.")
+
+                cards_per_row = 3
+                for start in range(0, len(series_books_df), cards_per_row):
+                    cols = st.columns(cards_per_row)
+                    chunk = series_books_df.iloc[start:start + cards_per_row]
+
+                    for col, (_, series_row) in zip(cols, chunk.iterrows()):
+                        with col:
+                            render_series_book_card(series_row, int(book["BookID"]))
 
 with edit_tab:
     st.markdown("### Edit Book Details")
