@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>The Listening Room | Audiobook Library</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,500;0,600;0,700;1,500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <script src="books.js" defer></script>
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="top-inner">
+      <a class="brand" href="./index.html" aria-label="The Listening Room home">
+        <span class="brand-mark" data-icon="headphones" aria-hidden="true"></span>
+        <span>The Listening Room</span>
+      </a>
+      <div class="top-actions">
+        <label class="palette-picker">
+          <span class="palette-swatch" aria-hidden="true"></span>
+          <span class="sr-only">Colour palette</span>
+          <select id="palette">
+            <option value="forest">Forest &amp; Parchment</option>
+            <option value="lavender">Lavender Daylight</option>
+            <option value="blue">Blue Hour</option>
+            <option value="midnight">Midnight Library</option>
+          </select>
+        </label>
+        <button class="icon-button sound-toggle" type="button" id="sound" aria-label="Sound effects" aria-pressed="false" title="Sound effects"><span data-icon="volumeOff"></span></button>
+        <button class="reader-button" type="button" id="reader" aria-haspopup="menu" aria-expanded="false" aria-controls="reader-menu"><span class="avatar" aria-hidden="true">T</span><span id="reader-name">Tori</span><span class="tiny" data-icon="chevronDown"></span></button>
+        <div id="reader-menu" class="reader-menu" role="menu" hidden>
+          <button type="button" role="menuitemradio" data-reader="Tori">Tori</button>
+          <button type="button" role="menuitemradio" data-reader="Angela">Angela</button>
+        </div>
+      </div>
+    </div>
+  </header>
+  <main class="page">
+    <section class="hero" aria-labelledby="hero-title">
+      <div class="hero-copy">
+        <div class="eyebrow"><span data-icon="sparkle"></span> FEATURED LISTEN</div>
+        <div aria-live="polite">
+          <h1 id="hero-title">Emily Wilde’s Encyclopaedia of Faeries</h1>
+          <p id="hero-description">By Heather Fawcett</p>
+        </div>
+        <div class="hero-actions">
+          <button class="hero-button" type="button" id="featured">Explore this book <span data-icon="arrowRight"></span></button>
+          <button class="hero-button hero-next" type="button" id="featured-next">Next pick</button>
+        </div>
+      </div>
+      <div class="hero-art" aria-hidden="true">
+        <div class="orbit orbit-one"></div><div class="orbit orbit-two"></div>
+        <span class="star star-one">✦</span><span class="star star-two">✧</span><span class="star star-three">✦</span><span class="star star-four">✧</span>
+        <img class="hero-book hero-back" id="featured-back" alt="" hidden>
+        <img class="hero-book hero-front" id="featured-cover" alt="" hidden>
+      </div>
+    </section>
+    <section class="library" aria-labelledby="library-title">
+      <div class="library-heading">
+        <div><h2 id="library-title">Your Library</h2><p id="result-count" aria-live="polite"></p></div>
+        <div class="search-wrap"><span data-icon="search"></span><input id="search" type="search" placeholder="Search title or author…" aria-label="Search title or author"></div>
+      </div>
+      <div class="connection-note" id="connection-note" hidden><span id="connection-text" role="status"></span> <button type="button" id="retry">Retry</button></div>
+      <div class="filter-bar">
+        <div class="filters" role="group" aria-label="Filter by reading status">
+          <button type="button" data-filter="All books" aria-pressed="true">All books</button>
+          <button type="button" data-filter="Listening" aria-pressed="false">Listening</button>
+          <button type="button" data-filter="To listen" aria-pressed="false">To listen</button>
+          <button type="button" data-filter="Finished" aria-pressed="false">Finished</button>
+        </div>
+        <label class="sort"><span class="sr-only">Sort books</span><span data-icon="sort"></span><select id="sort"><option value="shelf">Shelf order</option><option value="title">Title A–Z</option><option value="author">Author A–Z</option></select></label>
+      </div>
+      <div class="shelf" id="shelf"></div>
+      <button class="more-books" type="button" id="more" hidden>Show more books</button>
+      <div class="empty" id="empty" hidden><h3>No books found</h3><p>Try another search or reset your filters.</p><button type="button" id="reset">Show all books</button></div>
+    </section>
+  </main>
+  <dialog id="details" class="details" aria-labelledby="detail-title">
+    <div class="drawer">
+      <button class="icon-button drawer-close" id="close" type="button" aria-label="Close book details" autofocus><span data-icon="close"></span></button>
+      <div id="detail-content"></div>
+    </div>
+  </dialog>
+</body>
+</html>

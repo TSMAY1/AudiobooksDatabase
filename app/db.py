@@ -1,3 +1,5 @@
+import base64
+import html
 import pyodbc
 import pandas as pd
 import os
@@ -6,23 +8,78 @@ from dotenv import load_dotenv
 from pathlib import Path
 import fitz # PyMuPDF
 import hashlib
+import time
 import uuid
 from io import BytesIO
 from PIL import Image, ImageOps
+from storage import delete_asset, local_asset_path, read_asset_bytes, write_asset_bytes
 
 
 load_dotenv()
 
-conn_str = (
-    f"DRIVER={{{os.getenv('DB_DRIVER')}}};"
-    f"SERVER={os.getenv('DB_SERVER')};"
-    f"DATABASE={os.getenv('DB_NAME')};"
-    f"Trusted_Connection={os.getenv('DB_TRUSTED_CONNECTION')};"
+
+def build_connection_string() -> str:
+    auth_mode = os.getenv("DB_AUTH_MODE", "trusted").strip().lower()
+    driver = os.getenv("DB_DRIVER", "ODBC Driver 18 for SQL Server")
+    server = os.getenv("DB_SERVER", "").strip()
+    database = os.getenv("DB_NAME", "").strip()
+
+    if not server or not database:
+        raise ValueError("DB_SERVER and DB_NAME must be configured.")
+
+    common = f"DRIVER={{{driver}}};SERVER={server};DATABASE={database};"
+
+    if auth_mode == "azure_cli":
+        return common + "Encrypt=yes;TrustServerCertificate=no;"
+
+    if auth_mode == "managed_identity":
+        return (
+            common
+            + "Authentication=ActiveDirectoryMsi;"
+            + "Encrypt=yes;TrustServerCertificate=no;"
+        )
+
+    if auth_mode == "trusted":
+        trusted = os.getenv("DB_TRUSTED_CONNECTION", "yes")
+        return common + f"Trusted_Connection={trusted};"
+
+    raise ValueError("DB_AUTH_MODE must be 'trusted', 'managed_identity', or 'azure_cli'.")
+
+
+TRANSIENT_SQL_ERROR_CODES = (
+    "40197",  # Azure SQL encountered a temporary service error.
+    "40501",  # Azure SQL is temporarily busy.
+    "40613",  # A paused/serverless database is waking up.
+    "49918",
+    "49919",
+    "49920",  # Azure SQL temporarily cannot accept more requests.
 )
 
 
-def get_connection():
-    return pyodbc.connect(conn_str)
+def get_connection(max_attempts: int = 5):
+    connection_string = build_connection_string()
+
+    for attempt in range(max_attempts):
+        try:
+            if os.getenv("DB_AUTH_MODE", "trusted").strip().lower() == "azure_cli":
+                import struct
+                from azure.identity import AzureCliCredential
+
+                token = AzureCliCredential().get_token("https://database.windows.net/.default")
+                encoded = token.token.encode("utf-16-le")
+                access_token = struct.pack("<I", len(encoded)) + encoded
+                return pyodbc.connect(
+                    connection_string, attrs_before={1256: access_token}, timeout=30
+                )
+            return pyodbc.connect(connection_string, timeout=30)
+        except pyodbc.Error as exc:
+            is_transient = any(code in str(exc) for code in TRANSIENT_SQL_ERROR_CODES)
+            if not is_transient or attempt == max_attempts - 1:
+                raise
+
+            # Give a paused Azure SQL database time to wake up without making
+            # readers manually refresh through several temporary failures.
+            time.sleep(2 ** (attempt + 1))
 
 
 def run_query(query, params=None):
@@ -79,25 +136,15 @@ def resolve_asset_path(stored_path: str) -> Path:
     'assets\\Flyers\\2024-71\\file.pdf'
     into an absolute path under the project root.
     """
-    if not stored_path:
-        raise ValueError("No file path provided.")
-
-    normalized = stored_path.replace("\\", "/")
-    return PROJECT_ROOT / normalized
+    return local_asset_path(stored_path)
 
 
 @st.cache_data(show_spinner=False)
 def render_pdf_to_images(pdf_path: str):
-    pdf_file = resolve_asset_path(pdf_path)
-
-    if not pdf_file.exists():
-        raise FileNotFoundError(
-            f"PDF not found. Stored path: '{pdf_path}' | Resolved path: '{pdf_file}'"
-        )
-
     images = []
+    pdf_bytes = read_asset_bytes(pdf_path)
 
-    with fitz.open(pdf_file) as doc:
+    with fitz.open(stream=pdf_bytes, filetype="pdf") as doc:
         for page in doc:
             pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))
             images.append(pix.tobytes("png"))
@@ -106,14 +153,9 @@ def render_pdf_to_images(pdf_path: str):
 
 @st.cache_data(show_spinner=False)
 def get_pdf_page_count(pdf_path: str) -> int:
-    pdf_file = resolve_asset_path(pdf_path)
+    pdf_bytes = read_asset_bytes(pdf_path)
 
-    if not pdf_file.exists():
-        raise FileNotFoundError(
-            f"PDF not found. Stored path: '{pdf_path}' | Resolved path: '{pdf_file}'"
-        )
-
-    with fitz.open(pdf_file) as doc:
+    with fitz.open(stream=pdf_bytes, filetype="pdf") as doc:
         return len(doc)
 
 
@@ -123,14 +165,9 @@ def render_pdf_page(pdf_path: str, page_number: int):
     Render a single PDF page to PNG bytes.
     page_number is 1-based for easier use in the UI.
     """
-    pdf_file = resolve_asset_path(pdf_path)
+    pdf_bytes = read_asset_bytes(pdf_path)
 
-    if not pdf_file.exists():
-        raise FileNotFoundError(
-            f"PDF not found. Stored path: '{pdf_path}' | Resolved path: '{pdf_file}'"
-        )
-
-    with fitz.open(pdf_file) as doc:
+    with fitz.open(stream=pdf_bytes, filetype="pdf") as doc:
         if page_number < 1 or page_number > len(doc):
             raise ValueError(f"Page {page_number} is out of range for this PDF.")
 
@@ -247,13 +284,11 @@ def save_book_cover(
                 WHERE BookID = ?
             """, book_id)
 
-        storage_dir = get_cover_storage_dir(book_id)
         filename = f"cover_{uuid.uuid4().hex[:8]}.webp"
-        absolute_file_path = storage_dir / filename
-        absolute_file_path.write_bytes(image_bytes)
-
         relative_file_path = Path("assets") / "covers" / str(book_id) / filename
         db_file_path = str(relative_file_path).replace("/", "\\")
+
+        write_asset_bytes(db_file_path, image_bytes)
 
         cursor.execute("""
             INSERT INTO book_covers (
@@ -365,20 +400,13 @@ def delete_cover(cover_id: int):
         conn.commit()
 
     try:
-        absolute_file_path = resolve_asset_path(image_file_path)
-        if absolute_file_path.exists():
-            absolute_file_path.unlink()
+        delete_asset(image_file_path)
     except Exception:
         pass
 
 @st.cache_data(show_spinner=False)
 def load_cover_image_bytes(image_file_path: str) -> bytes:
-    absolute_file_path = resolve_asset_path(image_file_path)
-
-    if not absolute_file_path.exists():
-        raise FileNotFoundError(f"Cover image not found: {absolute_file_path}")
-
-    return absolute_file_path.read_bytes()
+    return read_asset_bytes(image_file_path)
 
 def format_book_number(num):
     if pd.isna(num):
@@ -415,6 +443,46 @@ def format_series(series, num):
 
 def detail_link(book_id):
     return f"/Book_Details?book_id={int(book_id)}"
+
+
+def render_clickable_cover(image_bytes, book_id, title, width="100%", max_width=None):
+    """Render cover bytes as an accessible link to the book details page."""
+    if image_bytes:
+        if image_bytes.startswith(b"\x89PNG"):
+            mime_type = "image/png"
+        elif image_bytes.startswith((b"GIF87a", b"GIF89a")):
+            mime_type = "image/gif"
+        elif image_bytes.startswith(b"RIFF") and b"WEBP" in image_bytes[:16]:
+            mime_type = "image/webp"
+        else:
+            mime_type = "image/jpeg"
+
+        encoded_image = base64.b64encode(image_bytes).decode("ascii")
+        safe_title = html.escape(str(title))
+        css_width = f"{width}px" if isinstance(width, int) else str(width)
+        max_width_style = (
+            f"max-width:{max_width}px;" if max_width is not None else ""
+        )
+        cover_markup = (
+            f'<img src="data:{mime_type};base64,{encoded_image}" '
+            f'alt="{safe_title}" '
+            f'style="width:{css_width};{max_width_style}height:auto;'
+            'border-radius:0.5rem;display:block;cursor:pointer;" />'
+        )
+    else:
+        safe_title = html.escape(str(title))
+        cover_markup = (
+            '<div style="aspect-ratio:2/3;width:100%;border-radius:0.5rem;'
+            'display:flex;align-items:center;justify-content:center;'
+            'background:rgba(128,128,128,0.12);font-size:2rem;">📖</div>'
+        )
+
+    st.markdown(
+        f'<a href="{detail_link(book_id)}" target="_blank" '
+        f'aria-label="Open {safe_title}" '
+        f'style="display:inline-block;width:100%;">{cover_markup}</a>',
+        unsafe_allow_html=True,
+    )
 
 
 def bump_cache_key(key: str):
