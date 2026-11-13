@@ -119,6 +119,7 @@ GROUP BY
     b.LengthType,
     b.Demographic,
     b.Description;
+GO
 
 -- Reader activity view
 
@@ -129,12 +130,64 @@ SELECT
 	r.ReaderName, 
 	b.Title, 
 	rs.ReadingStatus, 
-	rs.Rating
+	rs.Rating,
+	current_event.CurrentStatusSince,
+    status_dates.FirstAddedToTBRDate,
+    CASE
+        WHEN rs.ReadingStatus = 'TBR' THEN current_event.CurrentStatusSince
+    END AS CurrentTBRSince,
+    CASE
+        WHEN rs.ReadingStatus = 'Reading' THEN current_event.CurrentStatusSince
+    END AS CurrentReadingStartedDate,
+    status_dates.MostRecentReadDate,
+    CASE
+        WHEN current_event.CurrentStatusSince IS NOT NULL
+            THEN DATEDIFF(DAY, current_event.CurrentStatusSince, CONVERT(DATE, SYSDATETIME()))
+    END AS DaysInCurrentStatus
 FROM reading_status rs
 JOIN books b
 	ON b.BookID = rs.BookID
 JOIN readers r
-	ON r.ReaderID = rs.ReaderID;
+	ON r.ReaderID = rs.ReaderID
+OUTER APPLY (
+    SELECT
+        MIN(CASE WHEN history.ToStatus = 'TBR' THEN history.EffectiveDate END)
+            AS FirstAddedToTBRDate,
+        MAX(CASE WHEN history.ToStatus = 'Read' THEN history.EffectiveDate END)
+            AS MostRecentReadDate
+    FROM reader_book_status_history history
+    WHERE history.ReaderID = rs.ReaderID
+      AND history.BookID = rs.BookID
+) status_dates
+OUTER APPLY (
+    SELECT TOP 1
+        history.EffectiveDate AS CurrentStatusSince
+    FROM reader_book_status_history history
+    WHERE history.ReaderID = rs.ReaderID
+      AND history.BookID = rs.BookID
+      AND history.ToStatus = rs.ReadingStatus
+    ORDER BY history.ChangedAtUtc DESC, history.StatusHistoryID DESC
+) current_event;
+GO
+
+CREATE OR ALTER VIEW vw_reader_book_status_history AS
+SELECT
+    history.StatusHistoryID,
+    history.ReaderID,
+    r.ReaderName,
+    history.BookID,
+    b.Title,
+    history.FromStatus,
+    history.ToStatus,
+    history.ChangedAtUtc,
+    history.EffectiveDate,
+    history.EventSource,
+    history.Notes
+FROM reader_book_status_history history
+JOIN readers r
+    ON r.ReaderID = history.ReaderID
+JOIN books b
+    ON b.BookID = history.BookID;
 GO
 
 -- reader favourite books

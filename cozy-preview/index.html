@@ -7,9 +7,11 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,500;0,600;0,700;1,500&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css?v=phone-layout">
   <script src="books.js" defer></script>
-  <script src="app.js" defer></script>
+  <script src="releases.js?v=1" defer></script>
+  <script src="stats.js?v=1" defer></script>
+  <script src="app.js?v=phone-layout" defer></script>
 </head>
 <body>
   <header class="topbar">
@@ -34,12 +36,24 @@
         <div id="reader-menu" class="reader-menu" role="menu" hidden>
           <button type="button" role="menuitemradio" data-reader="Tori">Tori</button>
           <button type="button" role="menuitemradio" data-reader="Angela">Angela</button>
+          <button type="button" role="menuitem" id="open-admin" hidden>Admin</button>
         </div>
       </div>
     </div>
+    <button type="button" id="mobile-menu" class="mobile-menu" aria-controls="main-nav" aria-expanded="false"><span>Menu</span><span id="mobile-current">Library</span><span data-icon="chevronDown" aria-hidden="true"></span></button>
+    <nav class="main-nav" id="main-nav" aria-label="Library pages">
+      <a href="#library" id="library-link" aria-current="page">Library</a>
+      <a href="#my-shelf" id="dashboard-link">My Shelf</a>
+      <a href="#series" id="series-link">Series &amp; Universes</a>
+      <a href="#people" id="people-link">Authors &amp; Narrators</a>
+      <a href="#releases" id="releases-link">Upcoming Releases</a>
+      <a href="#stats" id="stats-link">Stats</a>
+      <a href="#book-guesser" id="guesser-link">Book Guesser</a>
+    </nav>
   </header>
   <main class="page">
-    <section class="hero" aria-labelledby="hero-title">
+    <div class="connection-note" id="connection-note" hidden><span id="connection-text" role="status"></span> <button type="button" id="retry">Retry</button></div>
+    <section class="hero" id="library-hero" aria-labelledby="hero-title">
       <div class="hero-copy">
         <div class="eyebrow"><span data-icon="sparkle"></span> FEATURED LISTEN</div>
         <div aria-live="polite">
@@ -58,12 +72,11 @@
         <img class="hero-book hero-front" id="featured-cover" alt="" hidden>
       </div>
     </section>
-    <section class="library" aria-labelledby="library-title">
+    <section class="library" id="library-page" aria-labelledby="library-title">
       <div class="library-heading">
         <div><h2 id="library-title">Your Library</h2><p id="result-count" aria-live="polite"></p></div>
         <div class="search-wrap"><span data-icon="search"></span><input id="search" type="search" placeholder="Search title or author…" aria-label="Search title or author"></div>
       </div>
-      <div class="connection-note" id="connection-note" hidden><span id="connection-text" role="status"></span> <button type="button" id="retry">Retry</button></div>
       <div class="filter-bar">
         <div class="filters" role="group" aria-label="Filter by reading status">
           <button type="button" data-filter="All books" aria-pressed="true">All books</button>
@@ -77,10 +90,209 @@
       <button class="more-books" type="button" id="more" hidden>Show more books</button>
       <div class="empty" id="empty" hidden><h3>No books found</h3><p>Try another search or reset your filters.</p><button type="button" id="reset">Show all books</button></div>
     </section>
+    <section id="dashboard" class="dashboard" aria-label="My Shelf" hidden>
+      <div class="dashboard-heading" id="dashboard-heading">
+        <h1 id="dashboard-title">My Shelf</h1>
+        <p id="dashboard-reader"></p>
+      </div>
+      <section class="hero favorite-hero" id="favorite-section" aria-labelledby="favorite-title" hidden>
+        <div class="hero-copy">
+          <h1 class="eyebrow favorite-eyebrow"><span data-icon="sparkle"></span><span id="favorite-label"></span></h1>
+          <h2 id="favorite-title"></h2>
+          <p id="favorite-author"></p>
+          <div class="favorite-rating" id="favorite-rating" hidden></div>
+          <button type="button" class="hero-button" id="favorite-book" aria-haspopup="dialog">Explore this book <span data-icon="arrowRight"></span></button>
+        </div>
+        <div class="hero-art favorite-art" aria-hidden="true">
+          <div class="orbit orbit-one"></div><div class="orbit orbit-two"></div>
+          <span class="star star-one">✦</span><span class="star star-two">✧</span>
+          <span class="star star-three">✦</span><span class="star star-four">✧</span>
+          <div class="favorite-cover" id="favorite-cover"></div>
+        </div>
+      </section>
+      <section class="shelf-section" aria-labelledby="listening-title">
+        <div class="section-heading"><h2 id="listening-title">Currently Listening</h2><button type="button" class="shelf-action" data-view-status="Listening" hidden>View all</button></div>
+        <div class="personal-books" id="listening-books"></div>
+      </section>
+      <section class="shelf-section" aria-labelledby="next-title">
+        <div class="section-heading"><h2 id="next-title">Up Next</h2><div class="section-actions"><button type="button" class="shelf-action" data-view-status="To listen" hidden>View all</button><button type="button" class="shelf-action primary" id="pick-next" aria-haspopup="dialog" hidden>Pick for me</button></div></div>
+        <div class="personal-books" id="next-books"></div>
+      </section>
+      <section class="shelf-section" aria-labelledby="finished-title">
+        <div class="section-heading"><h2 id="finished-title">Recently Finished</h2><button type="button" class="shelf-action" data-view-status="Finished" hidden>View all</button></div>
+        <div class="personal-books" id="finished-books"></div>
+      </section>
+      <section class="shelf-section" aria-labelledby="recent-comments-title">
+        <div class="section-heading"><h2 id="recent-comments-title">Your Recent Comments</h2></div>
+        <div class="recent-comments" id="recent-comments" aria-live="polite"></div>
+      </section>
+    </section>
+    <section id="series-page" aria-labelledby="series-title" hidden>
+      <div class="dashboard-heading series-heading">
+        <a href="#series" class="series-back" id="series-back" data-series-nav hidden>← All series</a>
+        <h1 id="series-title" tabindex="-1">Series &amp; Universes</h1>
+        <p id="series-description"></p>
+      </div>
+      <div id="series-directory">
+        <nav class="people-tabs" aria-label="Shelf type">
+          <a href="#series" class="shelf-action" id="series-tab" data-series-nav>Series</a>
+          <a href="#universes" class="shelf-action" id="universes-tab" data-series-nav>Universes</a>
+        </nav>
+        <label class="search-wrap series-search"><span data-icon="search"></span><span class="sr-only" id="series-search-label">Search series</span><input id="series-search" type="search" placeholder="Search series"></label>
+        <div class="series-directory-list" id="series-directory-list"></div>
+      </div>
+      <div id="series-shelf" hidden>
+        <div class="series-progress">
+          <div><p id="series-progress-label"></p><progress id="series-progress-bar" aria-labelledby="series-progress-label"></progress></div>
+          <button type="button" class="shelf-action primary" id="series-next" aria-haspopup="dialog" hidden></button>
+        </div>
+        <div id="universe-filter" class="universe-filter" hidden>
+          <label for="universe-series">Filter by series</label>
+          <select id="universe-series"></select>
+        </div>
+        <div class="shelf" id="series-books"></div>
+        <section id="universe-unordered" class="shelf-section" aria-labelledby="universe-unordered-title" hidden>
+          <div class="section-heading"><h2 id="universe-unordered-title">Reading order TBD</h2></div>
+          <div class="shelf" id="universe-unordered-books"></div>
+        </section>
+      </div>
+    </section>
+    <section id="people-page" aria-labelledby="people-title" hidden>
+      <div class="dashboard-heading">
+        <a href="#people" class="series-back" id="people-back" data-people-nav hidden></a>
+        <h1 id="people-title" tabindex="-1">Authors &amp; Narrators</h1>
+        <p id="people-description" hidden></p>
+      </div>
+      <div id="people-directory">
+        <nav class="people-tabs" aria-label="Credit type">
+          <a href="#people" class="shelf-action" id="authors-tab" data-people-nav>Authors</a>
+          <a href="#people/narrators" class="shelf-action" id="narrators-tab" data-people-nav>Narrators</a>
+        </nav>
+        <label class="search-wrap series-search"><span data-icon="search"></span><span class="sr-only">Search by name</span><input id="people-search" type="search" placeholder="Search by name"></label>
+        <div class="series-directory-list" id="people-directory-list"></div>
+      </div>
+      <div id="people-results" class="shelf people-results" hidden></div>
+      <p id="people-message" class="shelf-empty people-results" role="status" hidden></p>
+      <button id="people-retry" class="shelf-action" type="button" hidden>Retry loading narrators</button>
+    </section>
+    <section id="guesser" class="guesser" aria-labelledby="guesser-title" hidden>
+      <div class="dashboard-heading guesser-heading">
+        <h1 id="guesser-title">Book Guesser</h1>
+        <p>How well do you know your audiobook shelf?</p>
+      </div>
+      <div class="game-toolbar">
+        <label for="game-mode">Game mode</label>
+        <select id="game-mode">
+          <option value="cover">Cover Guesser</option>
+          <option value="hangman">Title Hangman</option>
+        </select>
+        <label for="game-category">Book pool</label>
+        <select id="game-category">
+          <option value="all">Entire library</option>
+          <option value="tori">Only Tori has read</option>
+          <option value="angela">Only Angela has read</option>
+          <option value="both">Both readers have read</option>
+          <option value="neither">Neither reader has read</option>
+        </select>
+        <p id="game-score" aria-live="polite">0 correct · 0 played</p>
+      </div>
+      <div class="game-board">
+        <div class="game-stage" aria-hidden="true">
+          <div class="game-cover" id="game-cover" data-reveal="0">
+            <img id="game-cover-image" alt="" hidden>
+            <span class="game-cover-mark" data-icon="headphones"></span>
+          </div>
+        </div>
+        <div class="game-play">
+          <h2 id="game-round-title">Choose a pool and start a round</h2>
+          <p id="game-clue" aria-live="polite">Use the cover clues or guess straight away.</p>
+          <p id="game-author-clue" aria-live="polite"></p>
+          <div id="game-answers" class="game-answers" role="group" aria-label="Possible book titles" hidden></div>
+          <div id="hangman" class="hangman" hidden>
+            <div class="hangman-puzzle" id="hangman-puzzle" role="img"></div>
+            <div class="hangman-attempts">
+              <span id="hangman-misses"></span>
+              <span id="hangman-meter" class="hangman-meter" aria-hidden="true"></span>
+            </div>
+            <div class="hangman-keys" id="hangman-keys" role="group" aria-label="Guess a letter or number"></div>
+            <form id="hangman-form" class="hangman-form">
+              <label class="sr-only" for="hangman-title">Full title guess</label>
+              <input id="hangman-title" type="text" placeholder="Guess the full title" autocomplete="off" required>
+              <button type="submit" class="shelf-action">Guess title</button>
+            </form>
+          </div>
+          <p id="game-result" class="game-result" role="status"></p>
+          <div class="game-actions">
+            <button type="button" class="shelf-action" id="game-hint" hidden>Peek at cover</button>
+            <button type="button" class="shelf-action" id="game-author-hint" hidden>Show author</button>
+            <button type="button" class="shelf-action" id="game-reveal" hidden>Reveal answer</button>
+            <button type="button" class="shelf-action primary" id="game-next">Start round</button>
+            <button type="button" class="shelf-action" id="game-details" aria-haspopup="dialog" hidden>Book details</button>
+          </div>
+        </div>
+      </div>
+    </section>
+    <section id="stats-page" aria-labelledby="stats-title" hidden>
+      <div class="dashboard-heading releases-heading">
+        <h1 id="stats-title">Listening Stats</h1>
+        <p id="stats-reader"></p>
+      </div>
+      <p id="stats-message" role="status"></p>
+      <button type="button" id="stats-retry" class="shelf-action" hidden>Retry loading stats</button>
+      <dl id="reader-stats" class="stats-metrics" hidden></dl>
+      <div id="stats-reports" class="stats-reports" hidden>
+        <section class="stats-panel" aria-labelledby="stats-history-title">
+          <div class="section-heading">
+            <h2 id="stats-history-title">Finishes by month</h2>
+            <div class="stats-year"><label for="stats-year">Year</label><select id="stats-year"></select></div>
+          </div>
+          <p id="stats-history-summary"></p>
+          <div id="stats-history"></div>
+        </section>
+        <section class="stats-panel" aria-labelledby="stats-genres-title">
+          <div class="section-heading"><h2 id="stats-genres-title">Top genres in the library</h2></div>
+          <div id="stats-genres"></div>
+          <p>A book can count toward more than one genre.</p>
+        </section>
+        <section class="stats-panel stats-collection" aria-labelledby="stats-collection-title">
+          <div class="section-heading"><h2 id="stats-collection-title">The whole collection</h2></div>
+          <dl id="collection-stats" class="stats-metrics"></dl>
+        </section>
+      </div>
+    </section>
+    <section id="releases-page" aria-labelledby="releases-title" hidden>
+      <div class="dashboard-heading releases-heading">
+        <h1 id="releases-title">Upcoming Releases</h1>
+        <p id="releases-next" hidden></p>
+      </div>
+      <div class="release-toolbar">
+        <div class="filters" role="group" aria-label="Release status">
+          <button type="button" data-release-status="Watching" aria-pressed="true">Watching</button>
+          <button type="button" data-release-status="Released" aria-pressed="false">Released</button>
+        </div>
+        <button type="button" class="shelf-action primary" id="release-add" hidden>Add release</button>
+      </div>
+      <p id="releases-message" role="status"></p>
+      <button type="button" class="shelf-action" id="releases-retry" hidden>Retry loading releases</button>
+      <div class="release-list" id="release-list"></div>
+    </section>
+    <section id="admin-page" aria-labelledby="admin-title" hidden>
+      <div class="dashboard-heading">
+        <h1 id="admin-title" tabindex="-1">Admin</h1>
+        <p>Manage book information, reading order, covers, and audiobook editions.</p>
+      </div>
+      <div id="admin-browser">
+        <div class="admin-browser-actions"><a href="#admin/new" id="admin-add-book" class="shelf-action primary">Add book</a></div>
+        <label class="search-wrap series-search"><span data-icon="search"></span><span class="sr-only">Find a book to edit</span><input id="admin-search" type="search" placeholder="Search title or author"></label>
+        <div id="admin-books" class="series-directory-list"></div>
+      </div>
+      <div id="admin-editor"></div>
+    </section>
   </main>
+  <dialog id="release-dialog" class="release-dialog" aria-labelledby="release-form-title"></dialog>
   <dialog id="details" class="details" aria-labelledby="detail-title">
     <div class="drawer">
-      <button class="icon-button drawer-close" id="close" type="button" aria-label="Close book details" autofocus><span data-icon="close"></span></button>
+      <div class="drawer-tools"><button class="icon-button drawer-close" id="close" type="button" aria-label="Close book details" autofocus><span data-icon="close"></span></button></div>
       <div id="detail-content"></div>
     </div>
   </dialog>

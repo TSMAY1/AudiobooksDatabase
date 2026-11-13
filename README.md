@@ -112,6 +112,26 @@ The project includes a multi-page Streamlit interface that allows users to inter
 - Ordered book selections
 - Integrated flyer preview system
 
+## The Listening Room on home Wi-Fi
+
+On the Windows computer that hosts the app, run `ipconfig` and find the IPv4 address of the connected Wi-Fi adapter. From the project folder in PowerShell, start the app with that address:
+
+```powershell
+.\scripts\preview-local.ps1 -Cozy -HomeWiFiAddress 192.168.2.10
+```
+
+Keep the PowerShell window open and the computer awake. Open the address printed by the launcher in a browser on a phone connected to the same home network. Press Ctrl+C to stop sharing. For desktop-only use, start the launcher with `-Cozy` alone.
+
+If the server is running and only the phone fails to connect, check that both devices use the same home network and that Windows marks that trusted network **Private**. If Windows Firewall is blocking the connection, run this once in an administrator PowerShell, substituting your current Wi-Fi address and the launch port if they differ:
+
+```powershell
+New-NetFirewallRule -DisplayName 'The Listening Room (Home Wi-Fi)' `
+    -Direction Inbound -Action Allow -Protocol TCP -LocalPort 8766 `
+    -LocalAddress 192.168.2.10 -RemoteAddress LocalSubnet -Profile Private
+```
+
+Home Wi-Fi mode uses the existing reader picker without a sign-in prompt. Anyone who can reach the app can choose either reader and use their editing features. Use it on your trusted home network and keep router port forwarding off for this port.
+
 ## Database Schema Overview
 
 <p align="center">

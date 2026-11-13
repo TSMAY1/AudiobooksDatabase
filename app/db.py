@@ -1,4 +1,5 @@
 import base64
+from contextlib import suppress
 import html
 import pyodbc
 import pandas as pd
@@ -248,7 +249,8 @@ def save_book_cover(
     cover_label: str = None,
     source_notes: str = None,
     make_primary: bool = False,
-    target_size=(400, 600)
+    target_size=(400, 600),
+    deduplicate=False,
 ):
     """
     Process an uploaded image, save it to disk, and insert its metadata into SQL Server.
@@ -260,6 +262,18 @@ def save_book_cover(
 
     with get_connection() as conn:
         cursor = conn.cursor()
+        if not cursor.execute("SELECT 1 FROM books WITH (UPDLOCK, HOLDLOCK) WHERE BookID = ?", book_id).fetchone():
+            raise ValueError("Book not found.")
+        if deduplicate:
+            existing = cursor.execute("""
+                SELECT TOP 1 CoverID FROM book_covers WHERE BookID = ? AND ImageHash = ?
+                ORDER BY IsPrimary DESC, SortOrder, CoverID
+            """, book_id, image_hash).fetchone()
+            if existing:
+                if make_primary:
+                    mark_primary_cover(cursor, book_id, existing[0])
+                conn.commit()
+                return
 
         cursor.execute("""
             SELECT ISNULL(MAX(SortOrder), 0) + 1
@@ -290,39 +304,33 @@ def save_book_cover(
 
         write_asset_bytes(db_file_path, image_bytes)
 
-        cursor.execute("""
-            INSERT INTO book_covers (
-                BookID,
-                CoverLabel,
-                ImageFilePath,
-                ImageFormat,
-                WidthPx,
-                HeightPx,
-                FileSizeKB,
-                ImageHash,
-                SortOrder,
-                IsPrimary,
-                SourceNotes
-            )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            book_id,
-            cover_label if cover_label else None,
-            db_file_path,
-            "webp",
-            width_px,
-            height_px,
-            file_size_kb,
-            image_hash,
-            next_sort_order,
-            1 if should_be_primary else 0,
-            source_notes if source_notes else None
-        ))
+        try:
+            cursor.execute("""
+                INSERT INTO book_covers (
+                    BookID, CoverLabel, ImageFilePath, ImageFormat, WidthPx, HeightPx,
+                    FileSizeKB, ImageHash, SortOrder, IsPrimary, SourceNotes
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                book_id, cover_label or None, db_file_path, "webp", width_px, height_px,
+                file_size_kb, image_hash, next_sort_order, int(should_be_primary), source_notes or None
+            ))
+        except Exception:
+            with suppress(Exception):
+                delete_asset(db_file_path)
+            raise
 
         conn.commit()
 
 
-def set_primary_cover(cover_id: int):
+def mark_primary_cover(cursor, book_id, cover_id):
+    cursor.execute("UPDATE book_covers SET IsPrimary = 0 WHERE BookID = ? AND IsPrimary = 1", book_id)
+    cursor.execute("UPDATE book_covers SET IsPrimary = 1 WHERE BookID = ? AND CoverID = ?", book_id, cover_id)
+    if cursor.rowcount == 0:
+        raise ValueError("Cover not found for this book.")
+
+
+def set_primary_cover(cover_id: int, expected_book_id=None):
     """
     Mark one cover as the primary cover for its book.
     """
@@ -340,23 +348,14 @@ def set_primary_cover(cover_id: int):
             raise ValueError("Cover not found.")
 
         book_id = row[0]
-
-        cursor.execute("""
-            UPDATE book_covers
-            SET IsPrimary = 0
-            WHERE BookID = ?
-        """, book_id)
-
-        cursor.execute("""
-            UPDATE book_covers
-            SET IsPrimary = 1
-            WHERE CoverID = ?
-        """, cover_id)
-
+        if expected_book_id is not None and expected_book_id != book_id:
+            raise ValueError("Cover not found for this book.")
+        cursor.execute("SELECT 1 FROM books WITH (UPDLOCK, HOLDLOCK) WHERE BookID = ?", book_id).fetchone()
+        mark_primary_cover(cursor, book_id, cover_id)
         conn.commit()
 
 
-def delete_cover(cover_id: int):
+def delete_cover(cover_id: int, expected_book_id=None):
     """
     Delete a cover record and its image file.
     If the deleted cover was primary, promote the next available cover.
@@ -364,45 +363,40 @@ def delete_cover(cover_id: int):
     with get_connection() as conn:
         cursor = conn.cursor()
 
-        cursor.execute("""
-            SELECT BookID, ImageFilePath, IsPrimary
-            FROM book_covers
-            WHERE CoverID = ?
-        """, cover_id)
+        book_id = expected_book_id
+        if book_id is None:
+            row = cursor.execute("SELECT BookID FROM book_covers WHERE CoverID = ?", cover_id).fetchone()
+            if not row:
+                raise ValueError("Cover not found.")
+            book_id = row[0]
 
-        row = cursor.fetchone()
+        cursor.execute("SELECT 1 FROM books WITH (UPDLOCK, HOLDLOCK) WHERE BookID = ?", book_id).fetchone()
+        row = cursor.execute("""
+            SELECT ImageFilePath, IsPrimary FROM book_covers WHERE BookID = ? AND CoverID = ?
+        """, book_id, cover_id).fetchone()
         if not row:
-            raise ValueError("Cover not found.")
-
-        book_id, image_file_path, was_primary = row
-
-        cursor.execute("""
-            DELETE FROM book_covers
-            WHERE CoverID = ?
-        """, cover_id)
+            raise ValueError("Cover not found for this book.")
+        image_file_path, was_primary = row
+        cursor.execute("DELETE FROM book_covers WHERE BookID = ? AND CoverID = ?", book_id, cover_id)
 
         if was_primary:
-            cursor.execute("""
+            replacement = cursor.execute("""
                 SELECT TOP 1 CoverID
                 FROM book_covers
                 WHERE BookID = ?
                 ORDER BY SortOrder ASC, CoverID ASC
-            """, book_id)
-
-            replacement = cursor.fetchone()
+            """, book_id).fetchone()
             if replacement:
-                cursor.execute("""
-                    UPDATE book_covers
-                    SET IsPrimary = 1
-                    WHERE CoverID = ?
-                """, replacement[0])
+                mark_primary_cover(cursor, book_id, replacement[0])
 
+        shared_asset = cursor.execute(
+            "SELECT TOP 1 1 FROM book_covers WHERE ImageFilePath = ?", image_file_path
+        ).fetchone()
         conn.commit()
 
-    try:
-        delete_asset(image_file_path)
-    except Exception:
-        pass
+    if not shared_asset:
+        with suppress(Exception):
+            delete_asset(image_file_path)
 
 @st.cache_data(show_spinner=False)
 def load_cover_image_bytes(image_file_path: str) -> bytes:

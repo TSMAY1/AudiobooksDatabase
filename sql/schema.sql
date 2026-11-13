@@ -76,7 +76,7 @@ CREATE TABLE book_genres (
     BookID INT NOT NULL,
     GenreID INT NOT NULL,
     GenreType NVARCHAR(50) NOT NULL
-        CHECK (GenreType IN ('Main', 'Secondary')),
+        CONSTRAINT CK_book_genres_GenreType CHECK (GenreType IN ('Main', 'Tag')),
 
     PRIMARY KEY (BookID, GenreID, GenreType),
     FOREIGN KEY (BookID) REFERENCES books(BookID),
@@ -126,6 +126,56 @@ ON reading_status (ReadingStatus, BookID)
 INCLUDE (ReaderID, Rating);
 GO
 
+CREATE TABLE reader_book_status_history (
+    StatusHistoryID BIGINT IDENTITY(1,1) PRIMARY KEY,
+    ReaderID INT NOT NULL,
+    BookID INT NOT NULL,
+    FromStatus NVARCHAR(20) NULL,
+    ToStatus NVARCHAR(20) NOT NULL,
+    ChangedAtUtc DATETIME2(7) NOT NULL
+        CONSTRAINT DF_reader_book_status_history_ChangedAtUtc
+        DEFAULT SYSUTCDATETIME(),
+    EffectiveDate DATE NULL,
+    EventSource NVARCHAR(20) NOT NULL
+        CONSTRAINT DF_reader_book_status_history_EventSource
+        DEFAULT ('App'),
+    Notes NVARCHAR(500) NULL,
+
+    CONSTRAINT FK_reader_book_status_history_ReaderID
+        FOREIGN KEY (ReaderID) REFERENCES readers(ReaderID),
+    CONSTRAINT FK_reader_book_status_history_BookID
+        FOREIGN KEY (BookID) REFERENCES books(BookID),
+    CONSTRAINT CK_reader_book_status_history_FromStatus
+        CHECK (FromStatus IS NULL OR FromStatus IN ('Unread', 'TBR', 'Reading', 'Read', 'DNF')),
+    CONSTRAINT CK_reader_book_status_history_ToStatus
+        CHECK (ToStatus IN ('Unread', 'TBR', 'Reading', 'Read', 'DNF')),
+    CONSTRAINT CK_reader_book_status_history_StatusChanged
+        CHECK (FromStatus IS NULL OR FromStatus <> ToStatus),
+    CONSTRAINT CK_reader_book_status_history_EventSource
+        CHECK (EventSource IN ('App', 'Migration', 'Manual'))
+);
+GO
+
+CREATE INDEX IX_reader_book_status_history_ReaderID_BookID_Date
+ON reader_book_status_history (ReaderID, BookID, EffectiveDate DESC, ChangedAtUtc DESC)
+INCLUDE (FromStatus, ToStatus, EventSource);
+GO
+
+CREATE INDEX IX_reader_book_status_history_ReaderID_ToStatus_Date
+ON reader_book_status_history (ReaderID, ToStatus, EffectiveDate DESC)
+INCLUDE (BookID, FromStatus, ChangedAtUtc, EventSource);
+GO
+
+CREATE INDEX IX_reader_book_status_history_BookID
+ON reader_book_status_history (BookID)
+INCLUDE (ReaderID, ToStatus, EffectiveDate);
+GO
+
+CREATE INDEX IX_reader_book_status_history_ReaderID_BookID_ChangedAtUtc
+ON reader_book_status_history (ReaderID, BookID, ChangedAtUtc DESC)
+INCLUDE (ToStatus, EffectiveDate);
+GO
+
 CREATE TABLE reader_book_comments (
     CommentID INT IDENTITY(1,1) PRIMARY KEY,
     ReaderID INT NOT NULL,
@@ -145,6 +195,25 @@ GO
 
 CREATE INDEX IX_reader_book_comments_ReaderID_BookID
 ON reader_book_comments (ReaderID, BookID);
+GO
+
+
+CREATE TABLE reader_hidden_recommendations (
+    ReaderID INT NOT NULL,
+    BookID INT NOT NULL,
+    HiddenAtUtc DATETIME2(7) NOT NULL
+        CONSTRAINT DF_reader_hidden_recommendations_HiddenAtUtc DEFAULT SYSUTCDATETIME(),
+
+    CONSTRAINT PK_reader_hidden_recommendations PRIMARY KEY (ReaderID, BookID),
+    CONSTRAINT FK_reader_hidden_recommendations_ReaderID
+        FOREIGN KEY (ReaderID) REFERENCES readers(ReaderID),
+    CONSTRAINT FK_reader_hidden_recommendations_BookID
+        FOREIGN KEY (BookID) REFERENCES books(BookID)
+);
+GO
+
+CREATE INDEX IX_reader_hidden_recommendations_BookID
+ON reader_hidden_recommendations (BookID);
 GO
 
 

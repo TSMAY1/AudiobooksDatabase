@@ -15,7 +15,7 @@ CREATE OR ALTER PROCEDURE AddBook
 	@Demographic NVARCHAR(50) = NULL,
 	@Description NVARCHAR(MAX) = NULL,
 	@MainGenres NVARCHAR(MAX) = NULL, -- e.g. 'Fantasy'
-	@SecondaryGenres NVARCHAR(MAX) = NULL -- e.g. 'Magic, Politics'
+	@Tags NVARCHAR(MAX) = NULL -- e.g. 'Enemies to Lovers, Found Family'
 AS
 BEGIN
 	SET NOCOUNT ON; -- Don't clutter output with row count messages
@@ -154,35 +154,35 @@ BEGIN
 			ON g.GenreName = mg.GenreName;
 	END;
 
-    -- 8. Process secondary genres
-    IF @SecondaryGenres IS NOT NULL AND LTRIM(RTRIM(@SecondaryGenres)) <> ''
+    -- 8. Process tags
+    IF @Tags IS NOT NULL AND LTRIM(RTRIM(@Tags)) <> ''
     BEGIN
-        DECLARE @SecondaryGenreTable TABLE (
+        DECLARE @TagTable TABLE (
             GenreName NVARCHAR(255) PRIMARY KEY
         );
 
-        INSERT INTO @SecondaryGenreTable (GenreName)
+        INSERT INTO @TagTable (GenreName)
         SELECT DISTINCT LTRIM(RTRIM(value))
-        FROM STRING_SPLIT(@SecondaryGenres, ',')
+        FROM STRING_SPLIT(@Tags, ',')
         WHERE LTRIM(RTRIM(value)) <> '';
 
         INSERT INTO genres (GenreName)
-        SELECT sg.GenreName
-        FROM @SecondaryGenreTable sg
+        SELECT tag.GenreName
+        FROM @TagTable tag
         WHERE NOT EXISTS (
             SELECT 1
             FROM genres g
-            WHERE g.GenreName = sg.GenreName
+                WHERE g.GenreName = tag.GenreName
         );
 
         INSERT INTO book_genres (BookID, GenreID, GenreType)
         SELECT
             @BookID,
             g.GenreID,
-            'Secondary'
-        FROM @SecondaryGenreTable sg
+            'Tag'
+        FROM @TagTable tag
         JOIN genres g
-            ON g.GenreName = sg.GenreName;
+            ON g.GenreName = tag.GenreName;
     END;
 
 		COMMIT TRANSACTION;
@@ -276,7 +276,8 @@ GO
 CREATE OR ALTER PROCEDURE SetReadingStatus
     @BookID INT,
     @ReaderName NVARCHAR(255),
-    @ReadingStatus NVARCHAR(20)
+    @ReadingStatus NVARCHAR(20),
+    @EffectiveDate DATE = NULL
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -286,6 +287,11 @@ BEGIN
 
     BEGIN TRY
         DECLARE @ReaderID INT;
+        DECLARE @PreviousStatus NVARCHAR(20);
+        DECLARE @ResolvedEffectiveDate DATE = COALESCE(
+            @EffectiveDate,
+            CONVERT(DATE, SYSDATETIME())
+        );
 
         IF @ReadingStatus NOT IN ('Unread', 'TBR', 'Reading', 'Read', 'DNF')
         BEGIN
@@ -312,12 +318,12 @@ BEGIN
             RAISERROR('Reader not found.', 16, 1);
         END;
 
-        IF EXISTS (
-            SELECT 1
-            FROM reading_status
-            WHERE ReaderID = @ReaderID
-              AND BookID = @BookID
-        )
+        SELECT @PreviousStatus = ReadingStatus
+        FROM reading_status WITH (UPDLOCK, HOLDLOCK)
+        WHERE ReaderID = @ReaderID
+          AND BookID = @BookID;
+
+        IF @PreviousStatus IS NOT NULL
         BEGIN
             UPDATE reading_status
             SET ReadingStatus = @ReadingStatus,
@@ -327,11 +333,48 @@ BEGIN
                          END
             WHERE ReaderID = @ReaderID
               AND BookID = @BookID;
+
+            IF @PreviousStatus <> @ReadingStatus
+            BEGIN
+                INSERT INTO reader_book_status_history (
+                    ReaderID,
+                    BookID,
+                    FromStatus,
+                    ToStatus,
+                    EffectiveDate,
+                    EventSource
+                )
+                VALUES (
+                    @ReaderID,
+                    @BookID,
+                    @PreviousStatus,
+                    @ReadingStatus,
+                    @ResolvedEffectiveDate,
+                    'App'
+                );
+            END;
         END
         ELSE
         BEGIN
             INSERT INTO reading_status (ReaderID, BookID, ReadingStatus, Rating)
             VALUES (@ReaderID, @BookID, @ReadingStatus, NULL);
+
+            INSERT INTO reader_book_status_history (
+                ReaderID,
+                BookID,
+                FromStatus,
+                ToStatus,
+                EffectiveDate,
+                EventSource
+            )
+            VALUES (
+                @ReaderID,
+                @BookID,
+                NULL,
+                @ReadingStatus,
+                @ResolvedEffectiveDate,
+                'App'
+            );
         END;
 
         COMMIT TRANSACTION;
@@ -346,15 +389,151 @@ GO
 
 
 --------------------------------------------------
+-- FinishReaderBook
+-- Atomically saves a Read/DNF outcome, rating, history event, and comment
+--------------------------------------------------
+
+CREATE OR ALTER PROCEDURE FinishReaderBook
+    @BookID INT,
+    @ReaderName NVARCHAR(255),
+    @ReadingStatus NVARCHAR(20),
+    @EffectiveDate DATE = NULL,
+    @Rating DECIMAL(4,2) = NULL,
+    @CommentText NVARCHAR(MAX) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+
+    BEGIN TRANSACTION;
+
+    BEGIN TRY
+        DECLARE @ReaderID INT;
+        DECLARE @PreviousStatus NVARCHAR(20);
+        DECLARE @ResolvedEffectiveDate DATE = COALESCE(
+            @EffectiveDate,
+            CONVERT(DATE, SYSDATETIME())
+        );
+        DECLARE @TrimmedComment NVARCHAR(MAX) = NULLIF(LTRIM(RTRIM(@CommentText)), '');
+
+        IF @ReadingStatus NOT IN ('Read', 'DNF')
+        BEGIN
+            RAISERROR('FinishReaderBook status must be Read or DNF.', 16, 1);
+        END;
+
+        IF @Rating IS NOT NULL AND (@Rating < 0 OR @Rating > 5)
+        BEGIN
+            RAISERROR('Rating must be between 0 and 5.', 16, 1);
+        END;
+
+        IF NOT EXISTS (SELECT 1 FROM books WHERE BookID = @BookID)
+        BEGIN
+            RAISERROR('Book not found.', 16, 1);
+        END;
+
+        SELECT @ReaderID = ReaderID
+        FROM readers
+        WHERE ReaderName = LTRIM(RTRIM(@ReaderName));
+
+        IF @ReaderID IS NULL
+        BEGIN
+            RAISERROR('Reader not found.', 16, 1);
+        END;
+
+        SELECT @PreviousStatus = ReadingStatus
+        FROM reading_status WITH (UPDLOCK, HOLDLOCK)
+        WHERE ReaderID = @ReaderID
+          AND BookID = @BookID;
+
+        IF @PreviousStatus IS NULL
+        BEGIN
+            RAISERROR('Reading status row not found for this reader and book.', 16, 1);
+        END;
+
+        UPDATE reading_status
+        SET ReadingStatus = @ReadingStatus,
+            Rating = COALESCE(@Rating, Rating)
+        WHERE ReaderID = @ReaderID
+          AND BookID = @BookID;
+
+        IF @PreviousStatus <> @ReadingStatus
+        BEGIN
+            INSERT INTO reader_book_status_history (
+                ReaderID,
+                BookID,
+                FromStatus,
+                ToStatus,
+                EffectiveDate,
+                EventSource
+            )
+            VALUES (
+                @ReaderID,
+                @BookID,
+                @PreviousStatus,
+                @ReadingStatus,
+                @ResolvedEffectiveDate,
+                'App'
+            );
+        END;
+
+        IF @TrimmedComment IS NOT NULL
+        BEGIN
+            INSERT INTO reader_book_comments (ReaderID, BookID, CommentText)
+            VALUES (@ReaderID, @BookID, @TrimmedComment);
+        END;
+
+        COMMIT TRANSACTION;
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0
+            ROLLBACK TRANSACTION;
+        THROW;
+    END CATCH
+END;
+GO
+
+
+--------------------------------------------------
+-- UpdateStatusHistoryEvent
+-- Corrects the user-entered date or notes for one history event
+-- without changing its immutable audit timestamp or status values
+--------------------------------------------------
+
+CREATE OR ALTER PROCEDURE UpdateStatusHistoryEvent
+    @StatusHistoryID BIGINT,
+    @EffectiveDate DATE = NULL,
+    @Notes NVARCHAR(500) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+
+    SET @Notes = NULLIF(LTRIM(RTRIM(@Notes)), '');
+
+    UPDATE reader_book_status_history
+    SET EffectiveDate = @EffectiveDate,
+        Notes = @Notes,
+        EventSource = 'Manual'
+    WHERE StatusHistoryID = @StatusHistoryID;
+
+    IF @@ROWCOUNT = 0
+    BEGIN
+        RAISERROR('Status history event not found.', 16, 1);
+    END;
+END;
+GO
+
+
+--------------------------------------------------
 -- UpdateBookGenres
--- Updates the Main and Secondary genres for a specified book
+-- Updates the main genres and tags for a specified book
 -- Note that it will replace previous genre entries for this book, it does not add to the existing genres listed.
 --------------------------------------------------
 
 CREATE OR ALTER PROCEDURE UpdateBookGenres
     @BookID INT,
     @MainGenres NVARCHAR(MAX) = NULL,
-    @SecondaryGenres NVARCHAR(MAX) = NULL
+    @Tags NVARCHAR(MAX) = NULL
 AS
 BEGIN
     SET NOCOUNT ON;
@@ -389,11 +568,11 @@ BEGIN
             WHERE LTRIM(RTRIM(value)) <> '';
         END;
 
-        IF @SecondaryGenres IS NOT NULL AND LTRIM(RTRIM(@SecondaryGenres)) <> ''
+        IF @Tags IS NOT NULL AND LTRIM(RTRIM(@Tags)) <> ''
         BEGIN
             INSERT INTO @AllGenres (GenreName)
             SELECT DISTINCT LTRIM(RTRIM(value))
-            FROM STRING_SPLIT(@SecondaryGenres, ',')
+            FROM STRING_SPLIT(@Tags, ',')
             WHERE LTRIM(RTRIM(value)) <> ''
               AND NOT EXISTS (
                     SELECT 1
@@ -424,14 +603,14 @@ BEGIN
             WHERE LTRIM(RTRIM(s.value)) <> '';
         END;
 
-        IF @SecondaryGenres IS NOT NULL AND LTRIM(RTRIM(@SecondaryGenres)) <> ''
+        IF @Tags IS NOT NULL AND LTRIM(RTRIM(@Tags)) <> ''
         BEGIN
             INSERT INTO book_genres (BookID, GenreID, GenreType)
             SELECT DISTINCT
                 @BookID,
                 g.GenreID,
-                'Secondary'
-            FROM STRING_SPLIT(@SecondaryGenres, ',') s
+                'Tag'
+            FROM STRING_SPLIT(@Tags, ',') s
             JOIN genres g
                 ON g.GenreName = LTRIM(RTRIM(s.value))
             WHERE LTRIM(RTRIM(s.value)) <> '';
@@ -939,6 +1118,109 @@ BEGIN
     END
 
     COMMIT TRANSACTION;
+END;
+GO
+
+--------------------------------------------------
+-- UpdateAudiobookVersion
+-- Updates an audiobook version and replaces its narrator assignments
+--------------------------------------------------
+
+CREATE OR ALTER PROCEDURE UpdateAudiobookVersion
+    @AudiobookVersionID INT,
+    @EditionName NVARCHAR(255) = NULL,
+    @Publisher NVARCHAR(255) = NULL,
+    @ReleaseYear INT = NULL,
+    @DurationMinutes INT = NULL,
+    @IsAbridged BIT = 0,
+    @IsFullCast BIT = 0,
+    @Notes NVARCHAR(MAX) = NULL,
+    @Narrators NVARCHAR(MAX) = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    SET XACT_ABORT ON;
+
+    IF NOT EXISTS (
+        SELECT 1
+        FROM audiobook_versions
+        WHERE AudiobookVersionID = @AudiobookVersionID
+    )
+        THROW 50001, 'Audiobook version not found.', 1;
+
+    BEGIN TRY
+        BEGIN TRANSACTION;
+
+        UPDATE audiobook_versions
+        SET
+            EditionName = NULLIF(LTRIM(RTRIM(@EditionName)), ''),
+            Publisher = NULLIF(LTRIM(RTRIM(@Publisher)), ''),
+            ReleaseYear = @ReleaseYear,
+            DurationMinutes = @DurationMinutes,
+            IsAbridged = @IsAbridged,
+            IsFullCast = @IsFullCast,
+            Notes = NULLIF(LTRIM(RTRIM(@Notes)), '')
+        WHERE AudiobookVersionID = @AudiobookVersionID;
+
+        DELETE FROM audiobook_version_narrators
+        WHERE AudiobookVersionID = @AudiobookVersionID;
+
+        IF NULLIF(LTRIM(RTRIM(@Narrators)), '') IS NOT NULL
+        BEGIN
+            DECLARE @NarratorTable TABLE (
+                NarratorName NVARCHAR(255) NOT NULL,
+                DisplayOrder INT NOT NULL
+            );
+
+            INSERT INTO @NarratorTable (NarratorName, DisplayOrder)
+            SELECT NarratorName, MIN(DisplayOrder)
+            FROM (
+                SELECT
+                    LTRIM(RTRIM(value)) AS NarratorName,
+                    CAST([key] AS INT) + 1 AS DisplayOrder
+                FROM OPENJSON(
+                    N'["' +
+                    REPLACE(
+                        STRING_ESCAPE(@Narrators, 'json'),
+                        ',',
+                        N'","'
+                    ) +
+                    N'"]'
+                )
+            ) parsed
+            WHERE NarratorName <> ''
+            GROUP BY NarratorName;
+
+            INSERT INTO narrators (NarratorName)
+            SELECT nt.NarratorName
+            FROM @NarratorTable nt
+            WHERE NOT EXISTS (
+                SELECT 1
+                FROM narrators n
+                WHERE n.NarratorName = nt.NarratorName
+            );
+
+            INSERT INTO audiobook_version_narrators (
+                AudiobookVersionID,
+                NarratorID,
+                DisplayOrder
+            )
+            SELECT
+                @AudiobookVersionID,
+                n.NarratorID,
+                nt.DisplayOrder
+            FROM @NarratorTable nt
+            JOIN narrators n
+                ON n.NarratorName = nt.NarratorName;
+        END
+
+        COMMIT TRANSACTION;
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0
+            ROLLBACK TRANSACTION;
+        THROW;
+    END CATCH
 END;
 GO
 
